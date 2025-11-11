@@ -1,0 +1,226 @@
+const {
+    default: makeWASocket,
+    useMultiFileAuthState,
+    fetchLatestBaileysVersion,
+    makeCacheableSignalKeyStore,
+    DisconnectReason,
+    downloadMediaMessage
+} = require('@whiskeysockets/baileys');
+
+const { Boom } = require('@hapi/boom');
+const P = require('pino');
+const axios = require('axios');
+const fs = require('fs');
+const util = require('util');
+const path = require('path');
+const { info } = require('console');
+
+
+async function saveChatHistory(sender, message, isBot = false) {
+    const historyDir = path.join(__dirname, 'chat_history');
+    if (!fs.existsSync(historyDir)) {
+        fs.mkdirSync(historyDir, { recursive: true });
+    }
+
+    const logFile = path.join(historyDir, `${sender.split('@')[0]}.log`);
+    const timestamp = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
+    const logMessage = `[${timestamp}] ${isBot ? 'Bot' : 'User'}: ${message}\n`;
+
+    try {
+        await fs.promises.appendFile(logFile, logMessage);
+    } catch (error) {
+        console.error('❌ Gagal menyimpan riwayat chat:', error);
+    }
+}
+
+function isNewUser(sender) {
+    const historyDir = path.join(__dirname, 'chat_history');
+    const logFile = path.join(historyDir, `${sender.split('@')[0]}.log`);
+    return !fs.existsSync(logFile);
+}
+
+
+function getGreetingResponse(text, forceSalutation = false) {
+    const greetings = ['hi', 'halo', 'hai', 'assalamualaikum', 'selamat pagi', 'selamat siang', 'selamat sore', 'selamat malam', 'misi', 'permisi', 'p', 'permisi kak'];
+    const normalizedText = text?.toLowerCase().trim();
+
+    const hour = new Date().getHours();
+    let waktu = 'malam';
+    if (hour >= 5 && hour < 11) waktu = 'pagi';
+    else if (hour >= 11 && hour < 15) waktu = 'siang';
+    else if (hour >= 15 && hour < 18) waktu = 'sore';
+    const salutation = `Selamat ${waktu}`;
+
+    if (greetings.includes(normalizedText)) {
+        return `${salutation} juga! 😊 Ada yang bisa aku bantu? Kamu bisa tanya misalnya:\n- Paket WiFi yang tersedia\n- Cara pembayaran\n- Hubungi teknisi\n\nSilakan tanyakan ya~`;
+    }
+
+    if (forceSalutation) {
+        return salutation;
+    }
+
+    return null;
+}
+
+function getInfoResponse(text) {
+    const lowerText = text.toLowerCase();
+
+    if (lowerText.includes('alamat') || lowerText.includes('lokasi') || lowerText.includes('kantor')) {
+        return `📍 Lokasi kantor kami:\nPT. Telemedia Prima Nusantara\nhttps://www.google.com/maps/place/PT.+Telemedia+Prima+Nusantara/@-2.9325764,104.7025048,17z`;
+    }
+
+    if (lowerText.includes('teknisi') || lowerText.includes('perbaikan') || lowerText.includes('gangguan')) {
+        return `🔧 Untuk perbaikan atau gangguan, silakan hubungi teknisi kami di: 0851-7205-1808`;
+    }
+
+    return null;
+}
+
+
+async function saveMedia(msg, sock, sender) {
+    const mediaType = Object.keys(msg.message).find(key =>
+        ['imageMessage', 'videoMessage', 'documentMessage', 'audioMessage', 'locationMessage'].includes(key)
+    );
+    if (!mediaType) return;
+
+    const mediaMessage = msg.message[mediaType];
+    const folderPath = path.join(__dirname, 'media', sender.replace(/[@:\.]/g, '_'));
+    if (!fs.existsSync(folderPath)) fs.mkdirSync(folderPath, { recursive: true });
+
+    let fileName = '';
+    if (mediaType === 'locationMessage') {
+        fileName = 'location_' + Date.now() + '.json';
+        const locationData = {
+            latitude: mediaMessage.degreesLatitude,
+            longitude: mediaMessage.degreesLongitude,
+            name: mediaMessage.name || '',
+            address: mediaMessage.address || ''
+        };
+        fs.writeFileSync(path.join(folderPath, fileName), JSON.stringify(locationData, null, 2));
+        console.log(`📍 Lokasi dari ${sender} disimpan.`);
+        return;
+    }
+
+    const stream = await downloadMediaMessage(msg, "buffer", {}, {
+        logger: P({ level: 'silent' }),
+        reuploadRequest: sock.updateMediaMessage
+    });
+
+    switch (mediaType) {
+        case 'imageMessage':
+            fileName = 'image_' + Date.now() + '.jpg';
+            break;
+        case 'videoMessage':
+            fileName = 'video_' + Date.now() + '.mp4';
+            break;
+        case 'audioMessage':
+            fileName = 'audio_' + Date.now() + '.mp3';
+            break;
+        case 'documentMessage':
+            fileName = mediaMessage.fileName || 'document_' + Date.now();
+            break;
+    }
+
+    if (fileName) {
+        const filePath = path.join(folderPath, fileName);
+        fs.writeFileSync(filePath, stream);
+        console.log(`💾 ${mediaType} dari ${sender} disimpan sebagai ${fileName}`);
+    }
+}
+
+
+async function startSock() {
+    const { state, saveCreds } = await useMultiFileAuthState('./auth_info');
+    const { version } = await fetchLatestBaileysVersion();
+
+    const sock = makeWASocket({
+        version,
+        logger: P({ level: 'silent' }),
+        printQRInTerminal: true,
+        auth: {
+            creds: state.creds,
+            keys: makeCacheableSignalKeyStore(state.keys, P({ level: 'silent' }))
+        }
+    });
+
+    sock.ev.on('creds.update', saveCreds);
+
+    sock.ev.on('messages.upsert', async ({ messages }) => {
+        const msg = messages[0];
+        if (!msg.message || msg.key.fromMe) return;
+
+        const sender = msg.key.remoteJid;
+        const isGroup = sender.endsWith('@g.us');
+        if (isGroup) return;
+
+        const wasNewUser = isNewUser(sender);
+
+        await saveMedia(msg, sock, sender);
+
+        const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
+        if (!text) return;
+
+        await saveChatHistory(sender, text);
+        console.log(`📩 Pesan diterima dari ${sender}: ${text}`);
+
+        if (wasNewUser) {
+            const welcomeMessage = `Selamat datang di Layanan Pelanggan WiFi! 👋\n\nSaya adalah asisten virtual yang siap membantu Anda dengan berbagai pertanyaan seputar layanan kami.`;
+            await sock.sendMessage(sender, { text: welcomeMessage });
+            await saveChatHistory(sender, welcomeMessage, true);
+        }
+
+        const greetingReply = getGreetingResponse(text);
+        if (greetingReply && !wasNewUser) {
+            await sock.sendMessage(sender, { text: greetingReply });
+            await saveChatHistory(sender, greetingReply, true);
+            return;
+        }
+
+        const infoReply = getInfoResponse(text);
+        if (infoReply) {
+            await sock.sendMessage(sender, { text: infoReply });
+            await saveChatHistory(sender, infoReply, true);
+            return;
+        }
+
+        // If the user was new and just said "hi", don't send to API.
+        if (wasNewUser && getGreetingResponse(text)) {
+            const followUp = "Silakan ajukan pertanyaan Anda mengenai layanan kami. Misalnya: Berapa harga paket internet?";
+            await sock.sendMessage(sender, { text: followUp });
+            await saveChatHistory(sender, followUp, true);
+            return;
+        }
+
+        try {
+            // For returning users, add the salutation. For new users, we already welcomed them.
+            const salutation = wasNewUser ? '' : getGreetingResponse(text, true) + ', ';
+            const response = await axios.post('http://127.0.0.1:8001/chat', { query: text });
+            const responseText = response.data.response.trim().replace(/^/gm, '👉 ');
+            const friendlyOutput = `${salutation}${responseText}`.concat('\n\nKalau ada pertanyaan lain, tinggal chat aja ya 😊');
+
+            await sock.sendMessage(sender, { text: friendlyOutput });
+            await saveChatHistory(sender, friendlyOutput, true);
+        } catch (error) {
+            console.error('❌ Error dari Python API:', error.message);
+            const errorMessage = 'Maaf, terjadi kesalahan saat memproses permintaan Anda. Silakan coba lagi nanti.';
+            await sock.sendMessage(sender, { text: errorMessage });
+            await saveChatHistory(sender, errorMessage, true);
+        }
+    });
+
+    sock.ev.on('connection.update', (update) => {
+        const { connection, lastDisconnect } = update;
+        if (connection === 'close') {
+            const shouldReconnect =
+                lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut;
+            console.log('Koneksi terputus. Reconnect?', shouldReconnect);
+            if (shouldReconnect) {
+                startSock();
+            }
+        } else if (connection === 'open') {
+            console.log('✅ Terhubung ke WhatsApp!');
+        }
+    });
+}
+
+startSock();

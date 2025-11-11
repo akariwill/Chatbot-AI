@@ -1,0 +1,11 @@
+langchain
+faiss-cpu
+langchain-google-genai
+google-generativeai
+langchain-community
+sentence-transformers
+fastapi
+uvicorn
+weaviate-client
+tqdm
+python-dotenv
