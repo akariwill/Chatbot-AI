@@ -1,11 +1,9 @@
 langchain
 faiss-cpu
 langchain-openai
-google-generativeai
 langchain-community
-sentence-transformers
-fastapi
+fastapi==0.109.0
+starlette==0.35.0
 uvicorn
-weaviate-client
-tqdm
+gunicorn
 python-dotenv

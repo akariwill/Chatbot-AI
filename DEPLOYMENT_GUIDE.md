@@ -62,10 +62,12 @@ If you don't have an account, sign up at [www.pythonanywhere.com](https://www.py
 1.  Go back to the **Web** tab.
 2.  In the **Virtualenv** section, enter the path to your virtual environment:
     `/home/your-username/.virtualenvs/my-chatbot-venv`
-3.  In the **Code** section, edit the **WSGI file** entry and replace the command with:
+3.  In the **Code** section, look for a field labeled **Command** (or similar, like 'Gunicorn command' or 'Web app command'). This is a text input field, not a link to a file.
+4.  In that **Command** field, paste the Gunicorn command:
     ```bash
     gunicorn --workers 4 --bind 0.0.0.0:8000 -k uvicorn.workers.UvicornWorker app:app
     ```
+    *   `app:app` refers to the `app` object inside your `app.py` file.
 
 ### 7. Reload your Web App
 
