@@ -1,6 +1,6 @@
 langchain
 faiss-cpu
-langchain-google-genai
+langchain-openai
 google-generativeai
 langchain-community
 sentence-transformers

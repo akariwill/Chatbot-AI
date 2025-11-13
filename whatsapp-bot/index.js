@@ -13,7 +13,54 @@ const axios = require('axios');
 const fs = require('fs');
 const util = require('util');
 const path = require('path');
+const http = require('http');
 const { info } = require('console');
+
+let sseClient = null;
+
+const server = http.createServer((req, res) => {
+    if (req.url === '/events') {
+        res.writeHead(200, {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+        });
+        sseClient = res;
+        req.on('close', () => {
+            sseClient = null;
+        });
+        return;
+    }
+
+    let filePath = path.join(__dirname, 'public', req.url === '/' ? 'index.html' : req.url);
+    const extname = String(path.extname(filePath)).toLowerCase();
+    const mimeTypes = {
+        '.html': 'text/html',
+        '.js': 'text/javascript',
+        '.css': 'text/css',
+    };
+
+    const contentType = mimeTypes[extname] || 'application/octet-stream';
+
+    fs.readFile(filePath, (err, content) => {
+        if (err) {
+            if (err.code == 'ENOENT') {
+                res.writeHead(404, { 'Content-Type': 'text/html' });
+                res.end('404 Not Found');
+            } else {
+                res.writeHead(500);
+                res.end('Sorry, check with the site admin for error: ' + err.code + ' ..\n');
+            }
+        } else {
+            res.writeHead(200, { 'Content-Type': contentType });
+            res.end(content, 'utf-8');
+        }
+    });
+});
+
+server.listen(3000, () => {
+    console.log('Server listening on http://localhost:3000');
+});
 
 
 async function saveChatHistory(sender, message, isBot = false) {
@@ -136,7 +183,7 @@ async function startSock() {
     const sock = makeWASocket({
         version,
         logger: P({ level: 'silent' }),
-        printQRInTerminal: true,
+        printQRInTerminal: false,
         auth: {
             creds: state.creds,
             keys: makeCacheableSignalKeyStore(state.keys, P({ level: 'silent' }))
@@ -209,8 +256,12 @@ async function startSock() {
     });
 
     sock.ev.on('connection.update', (update) => {
-        const { connection, lastDisconnect } = update;
+        const { connection, lastDisconnect, qr } = update;
+        if(qr && sseClient) {
+            sseClient.write(`data: ${qr}\n\n`);
+        }
         if (connection === 'close') {
+            console.log('Connection update:', update); // Detailed log
             const shouldReconnect =
                 lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut;
             console.log('Koneksi terputus. Reconnect?', shouldReconnect);

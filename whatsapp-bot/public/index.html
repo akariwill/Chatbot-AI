@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp QR Code</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Scan WhatsApp QR Code</h1>
+        <p>Scan the QR code below with your phone to connect to WhatsApp.</p>
+        <div id="qrCodeContainer">
+            <canvas id="qrCodeCanvas"></canvas>
+        </div>
+        <p class="instructions">
+            The QR code will appear here automatically when you start the bot.
+        </p>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>

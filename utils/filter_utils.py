@@ -1,7 +1,7 @@
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_openai import OpenAIEmbeddings
 import numpy as np
 import os
-from config.settings import GOOGLE_API_KEY, EMBEDDING_MODEL
+from config.settings import OPENAI_API_KEY, EMBEDDING_MODEL
 
 TOPIK_WIFI = [
     "Bagaimana cara pasang wifi?",
@@ -13,8 +13,8 @@ TOPIK_WIFI = [
     "Ada promo wifi?",
 ]
 
-embedding_model = GoogleGenerativeAIEmbeddings(
-    google_api_key=GOOGLE_API_KEY,
+embedding_model = OpenAIEmbeddings(
+    openai_api_key=OPENAI_API_KEY,
     model=EMBEDDING_MODEL
 )
 

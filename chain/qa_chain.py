@@ -1,9 +1,9 @@
 import json
-from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
+from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_community.vectorstores import FAISS
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
-from config.settings import GOOGLE_API_KEY, EMBEDDING_MODEL, CHAT_MODEL
+from config.settings import OPENAI_API_KEY, EMBEDDING_MODEL, CHAT_MODEL
 
 def count_tokens(text: str) -> int:
     return len(text)
@@ -29,14 +29,14 @@ def build_retriever(data):
     splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
     documents = splitter.split_documents(texts)
 
-    embeddings = GoogleGenerativeAIEmbeddings(google_api_key=GOOGLE_API_KEY, model=EMBEDDING_MODEL)
+    embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY, model=EMBEDDING_MODEL)
     vectordb = FAISS.from_documents(documents, embedding=embeddings)
     retriever = vectordb.as_retriever(search_kwargs={"k": 4})
     return retriever
 
 def build_chat_model():
-    return ChatGoogleGenerativeAI(
-        google_api_key=GOOGLE_API_KEY,
+    return ChatOpenAI(
+        openai_api_key=OPENAI_API_KEY,
         model=CHAT_MODEL,
         temperature=0.2,
         streaming=True
