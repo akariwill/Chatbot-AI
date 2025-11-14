@@ -1,5 +1,6 @@
 import os
 import logging
+from langchain.globals import set_llm_cache
 from utils.logger import setup_logger
 from chain.qa_chain import load_data, build_retriever, build_chat_model, build_prompt
 from utils.filter_utils import is_relevant_question
@@ -46,6 +47,7 @@ def chatbot_response(user_input: str) -> str:
 
 def initialize_chatbot():
     global retriever, chat_model
+    set_llm_cache(None)
     setup_logger()
     logging.info("Memulai Chatbot WiFi...")
 
