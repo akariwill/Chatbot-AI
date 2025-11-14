@@ -3,19 +3,16 @@ from flask_cors import CORS
 from main import initialize_chatbot, chatbot_response
 
 app = Flask(__name__)
-CORS(app)  # Mengizinkan semua origin, sama seperti FastAPI CORS middleware
+CORS(app) 
 
-# Inisialisasi chatbot sekali saat server start
 retriever, chat_model = initialize_chatbot()
 
 
-# Route GET "/" untuk test server di browser
 @app.route("/", methods=["GET"])
 def home():
     return "Chatbot WiFi server is running!"
 
 
-# Route POST "/chat" untuk chatbot
 @app.route("/chat", methods=["POST"])
 def chat_endpoint():
     data = request.get_json()

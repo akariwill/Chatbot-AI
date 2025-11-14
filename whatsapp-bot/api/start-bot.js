@@ -1,6 +1,9 @@
 import { makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, makeCacheableSignalKeyStore, DisconnectReason } from "@whiskeysockets/baileys";
 import P from "pino";
-import { setQR } from "./qr.js";
+import fs from "fs/promises";
+import path from "path";
+
+const QR_FILE = path.join("/tmp", "last_qr.txt");
 
 export default async function startBot() {
     const { state, saveCreds } = await useMultiFileAuthState("./auth_info");
@@ -15,13 +18,41 @@ export default async function startBot() {
 
     sock.ev.on("creds.update", saveCreds);
 
-    sock.ev.on("connection.update", (update) => {
+    sock.ev.on("connection.update", async (update) => {
         const { connection, lastDisconnect, qr } = update;
-        if (qr) setQR(qr);
+        
+        if (qr) {
+            try {
+                await fs.writeFile(QR_FILE, qr);
+                console.log("QR code saved to file.");
+            } catch (err) {
+                console.error("Failed to write QR code to file:", err);
+            }
+        }
+
         if (connection === "close") {
+            // If connection closed, the QR is no longer valid.
+            try {
+                await fs.unlink(QR_FILE);
+            } catch (err) {
+                if (err.code !== 'ENOENT') {
+                    console.error("Failed to delete QR file:", err);
+                }
+            }
+
             const shouldReconnect = lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut;
-            if (shouldReconnect) startBot();
+            if (shouldReconnect) {
+                startBot();
+            }
         } else if (connection === "open") {
+            // Connection is open, QR is no longer needed.
+            try {
+                await fs.unlink(QR_FILE);
+            } catch (err) {
+                if (err.code !== 'ENOENT') {
+                    console.error("Failed to delete QR file:", err);
+                }
+            }
             console.log("✅ Terhubung ke WhatsApp!");
         }
     });
