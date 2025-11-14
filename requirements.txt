@@ -7,3 +7,6 @@ starlette==0.35.0
 uvicorn
 gunicorn
 python-dotenv
+Flask
+Flask-Cors
+qrcode[pil]
