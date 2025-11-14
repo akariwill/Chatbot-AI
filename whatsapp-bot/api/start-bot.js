@@ -17,7 +17,7 @@ export default async function startBot() {
 
     sock.ev.on("connection.update", (update) => {
         const { connection, lastDisconnect, qr } = update;
-        if (qr) setQR(qr); // Update QR untuk frontend
+        if (qr) setQR(qr);
         if (connection === "close") {
             const shouldReconnect = lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut;
             if (shouldReconnect) startBot();
@@ -33,9 +33,8 @@ export default async function startBot() {
         const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
         if (!text) return;
 
-        // Kirim ke FastAPI
         try {
-            const response = await fetch("https://your-vercel-domain.vercel.app/api/chat", {
+            const response = await fetch("https://chatbot-nine-rosy.vercel.app//api/chat", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ query: text }),
@@ -49,5 +48,4 @@ export default async function startBot() {
     });
 }
 
-// Jalankan bot saat serverless di-start
 startBot().catch(console.error);

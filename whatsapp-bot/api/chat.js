@@ -10,8 +10,7 @@ export default async function handler(req, res) {
 
         if (!query) return res.status(400).json({ error: "Query required" });
 
-        // Ganti URL ini ke FastAPI kamu yang sudah deploy (misal Render/Heroku)
-        const response = await fetch("https://your-fastapi-url/chat", {
+        const response = await fetch("https://akariwill.pythonanywhere.com/chat", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ query }),

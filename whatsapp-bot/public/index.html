@@ -1,27 +1,28 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>WhatsApp Bot QR</title>
-<style>
-    body { font-family: sans-serif; text-align: center; margin-top: 50px; }
-    img { width: 250px; height: 250px; }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Bot QR</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<h1>Scan QR WhatsApp</h1>
-<img id="qrImage" alt="QR Code" />
-<script>
-    async function fetchQR() {
-        try {
-            const res = await fetch("/api/qr");
-            const data = await res.json();
-            if(data.qr) document.getElementById("qrImage").src = data.qr;
-        } catch(err) { console.error(err); }
-    }
-    fetchQR();
-    setInterval(fetchQR, 15000);
-</script>
+    <div class="container">
+        <h1>Scan QR Code to Start WhatsApp Bot</h1>
+        <div id="qrCodeContainer">
+            <img id="qrImage" alt="QR Code" />
+        </div>
+        <div class="instructions">
+            <p>To connect your WhatsApp, please follow these steps:</p>
+            <ol>
+                <li>Open WhatsApp on your phone.</li>
+                <li>Go to <strong>Settings</strong> > <strong>Linked Devices</strong>.</li>
+                <li>Tap on <strong>Link a Device</strong>.</li>
+                <li>Scan the QR code shown on this screen.</li>
+            </ol>
+        </div>
+        <p id="status">Fetching QR code...</p>
+    </div>
+    <script src="script.js"></script>
 </body>
 </html>
