@@ -3,7 +3,7 @@ import P from "pino";
 import fs from "fs/promises";
 import path from "path";
 
-const QR_FILE = path.join("/tmp", "last_qr.txt");
+const QR_FILE = path.join(process.cwd(), '..', '..', 'last_qr.txt');
 
 export default async function startBot() {
     const { state, saveCreds } = await useMultiFileAuthState("./auth_info");

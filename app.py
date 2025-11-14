@@ -11,9 +11,7 @@ CORS(app)
 
 retriever, chat_model = initialize_chatbot()
 
-# Path to the temporary file where the QR code string is stored
-# This path needs to be accessible by both the Node.js bot and this Flask app
-QR_FILE_PATH = os.path.join(os.path.expanduser('~'), '.gemini', 'tmp', 'b8b055e69170e7d462d0ace0dfd152526e8922e24b1f262090b10eb6eebdfc21', 'last_qr.txt')
+QR_FILE_PATH = './last_qr.txt'
 
 
 @app.route("/", methods=["GET"])

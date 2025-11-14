@@ -15,23 +15,26 @@ const util = require('util');
 const path = require('path');
 const http = require('http');
 const { info } = require('console');
+const QRCode = require('qrcode');
+const os = require('os');
 
-let sseClient = null;
+const QR_FILE = path.join(os.tmpdir(), 'last_qr.txt');
 
-const server = http.createServer((req, res) => {
-    if (req.url === '/events') {
-        res.writeHead(200, {
-            'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive',
-        });
-        sseClient = res;
-        req.on('close', () => {
-            sseClient = null;
-        });
+const server = http.createServer(async (req, res) => {
+    if (req.url === '/api/qr') {
+        try {
+            const qrContent = await fs.promises.readFile(QR_FILE, 'utf-8');
+            const qrDataUrl = await QRCode.toDataURL(qrContent);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ qr: qrDataUrl }));
+        } catch (err) {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ qr: null, message: 'QR code not generated yet.' }));
+        }
         return;
     }
 
+    // Serve static files
     let filePath = path.join(__dirname, 'public', req.url === '/' ? 'index.html' : req.url);
     const extname = String(path.extname(filePath)).toLowerCase();
     const mimeTypes = {
@@ -39,7 +42,6 @@ const server = http.createServer((req, res) => {
         '.js': 'text/javascript',
         '.css': 'text/css',
     };
-
     const contentType = mimeTypes[extname] || 'application/octet-stream';
 
     fs.readFile(filePath, (err, content) => {
@@ -59,7 +61,8 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(3000, () => {
-    console.log('Server listening on https://akariwill.pythonanywhere.com/chat');
+    console.log('Server listening on http://localhost:3000');
+    console.log('QR code will be available at http://localhost:3000');
 });
 
 
@@ -255,21 +258,42 @@ async function startSock() {
         }
     });
 
-    sock.ev.on('connection.update', (update) => {
+    sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
-        if(qr && sseClient) {
-            sseClient.write(`data: ${qr}\n\n`);
+
+        if (qr) {
+            try {
+                await fs.promises.writeFile(QR_FILE, qr);
+                console.log("QR code saved to file.");
+            } catch (err) {
+                console.error("Failed to write QR code to file:", err);
+            }
         }
+
         if (connection === 'close') {
-            console.log('Connection update:', update); // Detailed log
-            const shouldReconnect =
-                lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut;
-            console.log('Koneksi terputus. Reconnect?', shouldReconnect);
+            // If connection closed, the QR is no longer valid.
+            try {
+                await fs.promises.unlink(QR_FILE);
+            } catch (err) {
+                if (err.code !== 'ENOENT') {
+                    console.error("Failed to delete QR file:", err);
+                }
+            }
+
+            const shouldReconnect = lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut;
             if (shouldReconnect) {
                 startSock();
             }
         } else if (connection === 'open') {
-            console.log('✅ Terhubung ke WhatsApp!');
+            // Connection is open, QR is no longer needed.
+            try {
+                await fs.promises.unlink(QR_FILE);
+            } catch (err) {
+                if (err.code !== 'ENOENT') {
+                    console.error("Failed to delete QR file:", err);
+                }
+            }
+            console.log("✅ Terhubung ke WhatsApp!");
         }
     });
 }
