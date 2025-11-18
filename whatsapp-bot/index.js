@@ -20,8 +20,6 @@ const http = require('http');
 const QRCode = require('qrcode');
 const os = require('os');
 
-const { makeWASocket, fetchLatestBaileysVersion, useMultiFileAuthState } = require("@adiwajshing/baileys");
-
 const sock = makeWASocket({
   browser: ["Chrome (Linux)", "Chrome", "110.0"],
   printQRInTerminal: false
