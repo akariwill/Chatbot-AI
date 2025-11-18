@@ -181,21 +181,27 @@ async function saveMedia(msg, sockInstance, sender) {
 }
 
 async function startSock() {
+    // Prevent multiple start attempts
     if (isStarting) {
-        console.log('startSock: already starting, skip.');
+        console.log('startSock: Already starting, skipping.');
         return;
     }
     isStarting = true;
+    console.log('startSock: Starting a new connection...');
 
     try {
-        // ensure no duplicate socket running
-        if (sock) {
-            try { sock.ev.removeAllListeners(); sock.end(); } catch (e) { /* ignore */ }
-            sock = null;
-        }
-
         const { state, saveCreds } = await useMultiFileAuthState(AUTH_FOLDER);
         const { version } = await fetchLatestBaileysVersion();
+
+        // Clean up any existing socket
+        if (sock) {
+            sock.ev.removeAllListeners();
+            try {
+                sock.end();
+            } catch (e) {
+                console.warn('Error ending previous socket:', e);
+            }
+        }
 
         sock = makeWASocket({
             version,
@@ -212,6 +218,7 @@ async function startSock() {
         sock.ev.on('creds.update', saveCreds);
 
         sock.ev.on('messages.upsert', async ({ messages }) => {
+            // (message handling logic remains the same)
             try {
                 const msg = messages && messages[0];
                 if (!msg || !msg.message || msg.key?.fromMe) return;
@@ -277,72 +284,56 @@ async function startSock() {
         });
 
         sock.ev.on('connection.update', async (update) => {
-            try {
-                const { connection, lastDisconnect, qr } = update;
+            const { connection, lastDisconnect, qr } = update;
 
-                if (qr) {
-                    // write QR content as-is (string)
+            if (qr) {
+                try {
+                    await fs.promises.writeFile(QR_FILE, qr);
+                    console.log('🔄 QR code updated. Please scan.');
+                } catch (err) {
+                    console.error('Failed to write QR code to file:', err);
+                }
+            }
+
+            if (connection === 'open') {
+                isStarting = false; // Connection process is complete
+                console.log('✅ Terhubung ke WhatsApp!');
+                if (reconnectTimer) clearTimeout(reconnectTimer); // Clear any pending reconnect timers
+                try {
+                    if (fs.existsSync(QR_FILE)) {
+                        await fs.promises.unlink(QR_FILE);
+                    }
+                } catch (err) {
+                    console.warn('Could not delete QR file', err);
+                }
+            }
+
+            if (connection === 'close') {
+                isStarting = false; // Connection process is complete
+                const reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
+                console.warn(`❌ Connection closed. Reason: ${reason}`, util.inspect(lastDisconnect?.error, { depth: null }));
+
+                if (reason !== DisconnectReason.loggedOut) {
+                    console.log('Scheduling reconnect...');
+                    if (reconnectTimer) clearTimeout(reconnectTimer);
+                    reconnectTimer = setTimeout(startSock, 5000); // Reconnect after 5 seconds
+                } else {
+                    console.log('🚪 Logged out. Deleting auth info and stopping.');
                     try {
-                        await fs.promises.writeFile(QR_FILE, qr);
-                        console.log('🔄 QR code updated and saved.');
+                        await fs.promises.rm(AUTH_FOLDER, { recursive: true, force: true });
                     } catch (err) {
-                        console.error('Failed to write QR code to file:', err);
+                        console.error('Failed to remove auth folder:', err);
                     }
+                    // No automatic reconnect on loggedOut
                 }
-
-                if (connection === 'open') {
-                    console.log('✅ Terhubung ke WhatsApp!');
-                    // Do not delete auth or QR here (keep for safety). Optionally remove QR file to hide it:
-                    try {
-                        if (fs.existsSync(QR_FILE)) {
-                            await fs.promises.unlink(QR_FILE).catch(() => {});
-                        }
-                    } catch (err) { /* ignore */ }
-                }
-
-                if (connection === 'close') {
-                    const reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
-                    console.warn('❌ Connection closed. Reason:', reason, util.inspect(lastDisconnect?.error, { depth: null }));
-
-                    const shouldReconnect = reason !== DisconnectReason.loggedOut;
-                    console.log('Should reconnect:', shouldReconnect);
-
-                    if (shouldReconnect) {
-                        // schedule reconnect with backoff
-                        if (reconnectTimer) clearTimeout(reconnectTimer);
-                        reconnectTimer = setTimeout(() => {
-                            reconnectTimer = null;
-                            console.log('🔁 Reconnecting now...');
-                            startSock();
-                        }, 4000);
-                    } else {
-                        console.log('🚪 Logged out (user logged out). Please remove auth folder and re-scan QR to login again.');
-                        // if logged out, remove auth folder so next run is clean
-                        try {
-                            await fs.promises.rm(AUTH_FOLDER, { recursive: true, force: true });
-                        } catch (err) {
-                            console.error('Failed to remove auth folder:', err);
-                        }
-                    }
-                }
-            } catch (err) {
-                console.error('connection.update handler error:', err);
             }
         });
 
-        sock.ev.on('creds.update', saveCreds);
-
-        console.log('startSock: socket created.');
     } catch (err) {
-        console.error('startSock error:', err);
-        // try reconnect after a delay
-        if (reconnectTimer) clearTimeout(reconnectTimer);
-        reconnectTimer = setTimeout(() => {
-            reconnectTimer = null;
-            startSock();
-        }, 5000);
-    } finally {
+        console.error('startSock uncaught error:', err);
         isStarting = false;
+        if (reconnectTimer) clearTimeout(reconnectTimer);
+        reconnectTimer = setTimeout(startSock, 5000); // Retry on startup failure
     }
 }
 

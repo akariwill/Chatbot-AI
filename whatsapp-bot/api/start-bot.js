@@ -65,7 +65,7 @@ export default async function startBot() {
         if (!text) return;
 
         try {
-            const response = await fetch("https://chatbot-nine-rosy.vercel.app/api/chat", {
+            const response = await fetch("http://160.25.222.84:3000/api/chat", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ query: text }),
