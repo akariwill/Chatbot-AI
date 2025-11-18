@@ -15,6 +15,8 @@ const util = require('util');
 const path = require('path');
 const os = require('os');
 const { info } = require('console');
+const express = require('express');
+const qrcode = require('qrcode');
 
 
 async function saveChatHistory(sender, message, isBot = false) {
@@ -245,6 +247,45 @@ async function startSock() {
                     } else if (connection === 'open') {
                         console.log('✅ Terhubung ke WhatsApp!');
                     }
-                });}
+                });}const express = require('express');
+const qrcode = require('qrcode');
 
+// ... (existing code)
+
+async function startSock() {
+    // ... (existing sock creation and event handling)
+}
+
+// Create Express app
+const app = express();
+const port = 3000;
+
+// Serve static files from 'public' directory
+app.use(express.static(path.join(__dirname, 'public')));
+
+// API endpoint to get QR code
+app.get('/api/qr', async (req, res) => {
+    const qrFilePath = path.join(os.tmpdir(), 'last_qr.txt');
+    try {
+        const qrContent = await fs.promises.readFile(qrFilePath, 'utf-8');
+        if (qrContent) {
+            const qrDataUrl = await qrcode.toDataURL(qrContent);
+            res.json({ qr: qrDataUrl });
+        } else {
+            res.status(404).json({ error: 'QR code content not found or empty' });
+        }
+    } catch (err) {
+        if (err.code === 'ENOENT') {
+            res.status(404).json({ error: 'QR code file not found. Generate one first.' });
+        } else {
+            console.error('Error reading QR file or generating QR code:', err);
+            res.status(500).json({ error: 'Failed to get QR code' });
+        }
+    }
+});
+
+// Start the bot and the web server
 startSock();
+app.listen(port, () => {
+    console.log(`✅ Website running at http://160.25.222.84:${port}`);
+});
