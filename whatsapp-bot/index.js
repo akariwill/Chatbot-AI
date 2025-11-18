@@ -1,3 +1,5 @@
+// index.js (race-condition fixed)
+// Requirements: Node >= 16/18 recommended
 
 const {
     default: makeWASocket,
@@ -22,8 +24,12 @@ const QR_FILE = path.join(os.tmpdir(), 'last_qr.txt');
 const AUTH_FOLDER = './auth_info';
 
 let sock = null;
-let isStarting = false;
+
+// state guards to avoid race-condition / duplicate starts
+let startPromise = null;      // promise of the ongoing start operation (mutex)
 let reconnectTimer = null;
+let connected = false;        // true when connection === 'open'
+let lastStartAttempt = 0;     // timestamp of last start attempt (for backoff)
 
 const server = http.createServer(async (req, res) => {
     if (req.url === '/api/qr') {
@@ -180,161 +186,221 @@ async function saveMedia(msg, sockInstance, sender) {
     }
 }
 
+/**
+ * startSockMutex: ensures only 1 startSock is running at once.
+ * startPromise holds the current start operation promise.
+ */
 async function startSock() {
-    // Prevent multiple start attempts
-    if (isStarting) {
-        console.log('startSock: Already starting, skipping.');
-        return;
+    // If a start is already in progress, return the existing promise (mutex)
+    if (startPromise) {
+        console.log('startSock: another start in progress, awaiting it.');
+        return startPromise;
     }
-    isStarting = true;
-    console.log('startSock: Starting a new connection...');
 
-    try {
-        const { state, saveCreds } = await useMultiFileAuthState(AUTH_FOLDER);
-        const { version } = await fetchLatestBaileysVersion();
+    startPromise = (async () => {
+        // small backoff guard: prevent hammering startSock repeatedly
+        const now = Date.now();
+        if (now - lastStartAttempt < 2000) { // 2s min interval
+            const wait = 2000 - (now - lastStartAttempt);
+            console.log(`startSock: backing off for ${wait}ms`);
+            await new Promise(r => setTimeout(r, wait));
+        }
+        lastStartAttempt = Date.now();
 
-        // Clean up any existing socket
-        if (sock) {
-            sock.ev.removeAllListeners();
-            try {
-                sock.end();
-            } catch (e) {
-                console.warn('Error ending previous socket:', e);
-            }
+        // If already connected, don't start another socket
+        if (connected) {
+            console.log('startSock: already connected, skip starting.');
+            startPromise = null;
+            return;
         }
 
-        sock = makeWASocket({
-            version,
-            logger: P({ level: 'silent' }),
-            printQRInTerminal: false,
-            auth: {
-                creds: state.creds,
-                keys: makeCacheableSignalKeyStore(state.keys, P({ level: 'silent' }))
-            },
-            connectTimeoutMs: 60_000,
-            syncFullHistory: false
-        });
-
-        sock.ev.on('creds.update', saveCreds);
-
-        sock.ev.on('messages.upsert', async ({ messages }) => {
-            // (message handling logic remains the same)
-            try {
-                const msg = messages && messages[0];
-                if (!msg || !msg.message || msg.key?.fromMe) return;
-
-                const sender = msg.key.remoteJid;
-                const isGroup = sender?.endsWith?.('@g.us');
-                if (isGroup) return;
-
-                const wasNewUser = isNewUser(sender);
-
-                await saveMedia(msg, sock, sender);
-
-                const text = msg.message.conversation || (msg.message.extendedTextMessage && msg.message.extendedTextMessage.text);
-                if (!text) return;
-
-                await saveChatHistory(sender, text);
-                console.log(`📩 Pesan diterima dari ${sender}: ${text}`);
-
-                if (wasNewUser) {
-                    const welcomeMessage = `Selamat datang di Layanan Pelanggan WiFi! 👋\n\nSaya adalah asisten virtual yang siap membantu Anda dengan berbagai pertanyaan seputar layanan kami.`;
-                    await sock.sendMessage(sender, { text: welcomeMessage });
-                    await saveChatHistory(sender, welcomeMessage, true);
-                }
-
-                const greetingReply = getGreetingResponse(text);
-                if (greetingReply && !wasNewUser) {
-                    await sock.sendMessage(sender, { text: greetingReply });
-                    await saveChatHistory(sender, greetingReply, true);
-                    return;
-                }
-
-                const infoReply = getInfoResponse(text);
-                if (infoReply) {
-                    await sock.sendMessage(sender, { text: infoReply });
-                    await saveChatHistory(sender, infoReply, true);
-                    return;
-                }
-
-                if (wasNewUser && getGreetingResponse(text)) {
-                    const followUp = "Silakan ajukan pertanyaan Anda mengenai layanan kami. Misalnya: Berapa harga paket internet?";
-                    await sock.sendMessage(sender, { text: followUp });
-                    await saveChatHistory(sender, followUp, true);
-                    return;
-                }
-
+        console.log('startSock: starting new socket');
+        try {
+            // Clean up any old socket
+            if (sock) {
                 try {
-                    const salutation = wasNewUser ? '' : getGreetingResponse(text, true) + ', ';
-                    const response = await axios.post('http://160.25.222.84:8001/chat', { query: text }, { timeout: 20000 });
-                    const responseText = (response.data?.response || '').trim().replace(/^/gm, '👉 ');
-                    const friendlyOutput = `${salutation}${responseText}`.concat('\n\nKalau ada pertanyaan lain, tinggal chat aja ya 😊');
-
-                    await sock.sendMessage(sender, { text: friendlyOutput });
-                    await saveChatHistory(sender, friendlyOutput, true);
-                } catch (err) {
-                    console.error('❌ Error dari Python API:', err.message || err);
-                    const errorMessage = 'Maaf, terjadi kesalahan saat memproses permintaan Anda. Silakan coba lagi nanti.';
-                    await sock.sendMessage(sender, { text: errorMessage });
-                    await saveChatHistory(sender, errorMessage, true);
+                    sock.ev.removeAllListeners();
+                    sock.end();
+                } catch (e) {
+                    console.warn('startSock: error while ending old socket', e);
                 }
-            } catch (innerErr) {
-                console.error('messages.upsert handler error:', innerErr);
-            }
-        });
-
-        sock.ev.on('connection.update', async (update) => {
-            const { connection, lastDisconnect, qr } = update;
-
-            if (qr) {
-                try {
-                    await fs.promises.writeFile(QR_FILE, qr);
-                    console.log('🔄 QR code updated. Please scan.');
-                } catch (err) {
-                    console.error('Failed to write QR code to file:', err);
-                }
+                sock = null;
             }
 
-            if (connection === 'open') {
-                isStarting = false; // Connection process is complete
-                console.log('✅ Terhubung ke WhatsApp!');
-                if (reconnectTimer) clearTimeout(reconnectTimer); // Clear any pending reconnect timers
+            const { state, saveCreds } = await useMultiFileAuthState(AUTH_FOLDER);
+            const { version } = await fetchLatestBaileysVersion();
+
+            // create socket
+            sock = makeWASocket({
+                version,
+                logger: P({ level: 'silent' }),
+                printQRInTerminal: false,
+                auth: {
+                    creds: state.creds,
+                    keys: makeCacheableSignalKeyStore(state.keys, P({ level: 'silent' }))
+                },
+                connectTimeoutMs: 60_000,
+                syncFullHistory: false
+            });
+
+            // ensure we save creds on update
+            sock.ev.on('creds.update', saveCreds);
+
+            // message handler
+            sock.ev.on('messages.upsert', async ({ messages }) => {
                 try {
-                    if (fs.existsSync(QR_FILE)) {
-                        await fs.promises.unlink(QR_FILE);
+                    const msg = messages && messages[0];
+                    if (!msg || !msg.message || msg.key?.fromMe) return;
+
+                    const sender = msg.key.remoteJid;
+                    const isGroup = sender?.endsWith?.('@g.us');
+                    if (isGroup) return;
+
+                    const wasNewUser = isNewUser(sender);
+
+                    await saveMedia(msg, sock, sender);
+
+                    const text = msg.message.conversation || (msg.message.extendedTextMessage && msg.message.extendedTextMessage.text);
+                    if (!text) return;
+
+                    await saveChatHistory(sender, text);
+                    console.log(`📩 Pesan diterima dari ${sender}: ${text}`);
+
+                    if (wasNewUser) {
+                        const welcomeMessage = `Selamat datang di Layanan Pelanggan WiFi! 👋\n\nSaya adalah asisten virtual yang siap membantu Anda dengan berbagai pertanyaan seputar layanan kami.`;
+                        await sock.sendMessage(sender, { text: welcomeMessage });
+                        await saveChatHistory(sender, welcomeMessage, true);
                     }
-                } catch (err) {
-                    console.warn('Could not delete QR file', err);
-                }
-            }
 
-            if (connection === 'close') {
-                isStarting = false; // Connection process is complete
-                const reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
-                console.warn(`❌ Connection closed. Reason: ${reason}`, util.inspect(lastDisconnect?.error, { depth: null }));
+                    const greetingReply = getGreetingResponse(text);
+                    if (greetingReply && !wasNewUser) {
+                        await sock.sendMessage(sender, { text: greetingReply });
+                        await saveChatHistory(sender, greetingReply, true);
+                        return;
+                    }
 
-                if (reason !== DisconnectReason.loggedOut) {
-                    console.log('Scheduling reconnect...');
-                    if (reconnectTimer) clearTimeout(reconnectTimer);
-                    reconnectTimer = setTimeout(startSock, 5000); // Reconnect after 5 seconds
-                } else {
-                    console.log('🚪 Logged out. Deleting auth info and stopping.');
+                    const infoReply = getInfoResponse(text);
+                    if (infoReply) {
+                        await sock.sendMessage(sender, { text: infoReply });
+                        await saveChatHistory(sender, infoReply, true);
+                        return;
+                    }
+
+                    if (wasNewUser && getGreetingResponse(text)) {
+                        const followUp = "Silakan ajukan pertanyaan Anda mengenai layanan kami. Misalnya: Berapa harga paket internet?";
+                        await sock.sendMessage(sender, { text: followUp });
+                        await saveChatHistory(sender, followUp, true);
+                        return;
+                    }
+
                     try {
-                        await fs.promises.rm(AUTH_FOLDER, { recursive: true, force: true });
-                    } catch (err) {
-                        console.error('Failed to remove auth folder:', err);
-                    }
-                    // No automatic reconnect on loggedOut
-                }
-            }
-        });
+                        const salutation = wasNewUser ? '' : getGreetingResponse(text, true) + ', ';
+                        const response = await axios.post('http://160.25.222.84:8001/chat', { query: text }, { timeout: 20000 });
+                        const responseText = (response.data?.response || '').trim().replace(/^/gm, '👉 ');
+                        const friendlyOutput = `${salutation}${responseText}`.concat('\n\nKalau ada pertanyaan lain, tinggal chat aja ya 😊');
 
-    } catch (err) {
-        console.error('startSock uncaught error:', err);
-        isStarting = false;
-        if (reconnectTimer) clearTimeout(reconnectTimer);
-        reconnectTimer = setTimeout(startSock, 5000); // Retry on startup failure
-    }
+                        await sock.sendMessage(sender, { text: friendlyOutput });
+                        await saveChatHistory(sender, friendlyOutput, true);
+                    } catch (err) {
+                        console.error('❌ Error dari Python API:', err.message || err);
+                        const errorMessage = 'Maaf, terjadi kesalahan saat memproses permintaan Anda. Silakan coba lagi nanti.';
+                        await sock.sendMessage(sender, { text: errorMessage });
+                        await saveChatHistory(sender, errorMessage, true);
+                    }
+                } catch (innerErr) {
+                    console.error('messages.upsert handler error:', innerErr);
+                }
+            });
+
+            // connection update handler
+            sock.ev.on('connection.update', async (update) => {
+                try {
+                    const { connection, lastDisconnect, qr } = update;
+
+                    if (qr) {
+                        // write QR - only used by the UI to show QR, safe to overwrite
+                        try {
+                            await fs.promises.writeFile(QR_FILE, qr);
+                            console.log('🔄 QR code updated. Please scan.');
+                        } catch (err) {
+                            console.error('Failed to write QR code to file:', err);
+                        }
+                    }
+
+                    if (connection === 'open') {
+                        connected = true;
+                        // clear any pending reconnect attempts
+                        if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+                        console.log('✅ Terhubung ke WhatsApp!');
+                        // optionally remove QR file (hide it), but not required
+                        try { if (fs.existsSync(QR_FILE)) await fs.promises.unlink(QR_FILE).catch(() => {}); } catch(e){/*ignore*/ }
+                    }
+
+                    if (connection === 'close') {
+                        const reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
+                        console.warn(`❌ Connection closed. Reason: ${reason}`, util.inspect(lastDisconnect?.error, { depth: null }));
+                        connected = false;
+
+                        // if logged out, don't auto-reconnect
+                        if (reason === DisconnectReason.loggedOut) {
+                            console.log('🚪 Logged out. Please remove auth folder and re-scan QR to login again.');
+                            try { await fs.promises.rm(AUTH_FOLDER, { recursive: true, force: true }); } catch(e){ console.error('Failed to remove auth folder:', e); }
+                            // stop here
+                            return;
+                        }
+
+                        // schedule reconnect only if not already reconnecting and not connected
+                        if (!reconnectTimer && !connected) {
+                            const delay = computeReconnectDelay();
+                            console.log(`Scheduling reconnect in ${delay} ms`);
+                            reconnectTimer = setTimeout(() => {
+                                reconnectTimer = null;
+                                // only attempt start if no other start is running and still not connected
+                                if (!startPromise && !connected) {
+                                    console.log('🔁 Reconnect attempt starting now...');
+                                    startSock().catch(e => console.error('reconnect startSock error', e));
+                                } else {
+                                    console.log('Reconnect skipped because start is in progress or already connected.');
+                                }
+                            }, delay);
+                        } else {
+                            console.log('Reconnect already scheduled or already connected; skip scheduling.');
+                        }
+                    }
+                } catch (err) {
+                    console.error('connection.update handler error:', err);
+                }
+            });
+
+            console.log('startSock: socket created and handlers attached.');
+        } catch (err) {
+            console.error('startSock uncaught error:', err);
+            // if start failed, schedule a retry with exponential backoff
+            const delay = computeReconnectDelay();
+            console.log(`startSock failed, scheduling retry in ${delay} ms`);
+            if (reconnectTimer) clearTimeout(reconnectTimer);
+            reconnectTimer = setTimeout(() => {
+                reconnectTimer = null;
+                startSock().catch(e => console.error('retry startSock failed', e));
+            }, delay);
+        } finally {
+            // release mutex
+            startPromise = null;
+        }
+    })();
+
+    return startPromise;
+}
+
+// exponential-style reconnect delay with cap
+function computeReconnectDelay() {
+    const base = 3000; // 3s
+    const max = 30000; // 30s
+    const since = Date.now() - lastStartAttempt;
+    // simple strategy: if last attempt very recent, increase delay
+    if (since < 5000) return Math.min(max, base * 2);
+    if (since < 15000) return Math.min(max, base * 1.5);
+    return base;
 }
 
 // graceful shutdown
@@ -342,6 +408,7 @@ process.on('SIGINT', async () => {
     console.log('SIGINT received. Shutting down gracefully...');
     try {
         if (reconnectTimer) clearTimeout(reconnectTimer);
+        if (startPromise) await startPromise.catch(() => {});
         if (sock) {
             try { sock.ev.removeAllListeners(); sock.end(); } catch (e) {}
         }
@@ -359,4 +426,5 @@ process.on('unhandledRejection', (reason) => {
     console.error('Unhandled rejection:', reason);
 });
 
-startSock();
+// initial start
+startSock().catch(e => console.error('initial startSock failed', e));
