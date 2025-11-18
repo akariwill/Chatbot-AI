@@ -1,4 +1,4 @@
-// index.js (race-condition, error handling, and lockfile fixed)
+// index.js (race-condition, error handling, and lockfile fixed v2)
 // Requirements: Node >= 16/18 recommended
 
 const {
@@ -27,6 +27,7 @@ const LOCK_FILE = './whatsapp.lock';
 
 let sock = null;
 let reconnectTimer = null;
+let isConnecting = false; // State guard to prevent connection race conditions
 
 // --- Server for QR Code Display ---
 const server = http.createServer(async (req, res) => {
@@ -68,39 +69,51 @@ const server = http.createServer(async (req, res) => {
 // --- Core Bot Logic ---
 
 async function startBot() {
-    console.log('Starting bot...');
-
-    // Cleanup old socket
-    if (sock) {
-        sock.ev.removeAllListeners();
-        try {
-            sock.end(new Error('Restarting...'));
-        } catch {}
+    if (isConnecting) {
+        console.log('startBot: Connection attempt already in progress. Aborting.');
+        return;
     }
+    isConnecting = true;
 
-    const { state, saveCreds } = await useMultiFileAuthState(AUTH_FOLDER);
-    const { version } = await fetchLatestBaileysVersion();
+    try {
+        console.log('Starting bot connection...');
 
-    sock = makeWASocket({
-        version,
-        logger: P({ level: 'silent' }),
-        printQRInTerminal: false,
-        auth: {
-            creds: state.creds,
-            keys: makeCacheableSignalKeyStore(state.keys, P({ level: 'silent' }))
-        },
-        connectTimeoutMs: 60_000,
-        syncFullHistory: false,
-        // Add browser configuration to reduce multi-device conflicts
-        browser: ['Gemini-Bot', 'Chrome', '1.0.0']
-    });
+        // Cleanup old socket
+        if (sock) {
+            sock.ev.removeAllListeners();
+            try {
+                sock.end(new Error('Restarting...'));
+            } catch {}
+        }
 
-    // Attach event listeners
-    sock.ev.on('creds.update', saveCreds);
-    sock.ev.on('connection.update', (update) => handleConnectionUpdate(update));
-    sock.ev.on('messages.upsert', (msg) => handleMessage(msg));
+        const { state, saveCreds } = await useMultiFileAuthState(AUTH_FOLDER);
+        const { version } = await fetchLatestBaileysVersion();
 
-    console.log('Socket created and handlers attached.');
+        sock = makeWASocket({
+            version,
+            logger: P({ level: 'silent' }),
+            printQRInTerminal: false,
+            auth: {
+                creds: state.creds,
+                keys: makeCacheableSignalKeyStore(state.keys, P({ level: 'silent' }))
+            },
+            connectTimeoutMs: 60_000,
+            syncFullHistory: false,
+            browser: ['Gemini-Bot', 'Chrome', '1.0.0']
+        });
+
+        // Attach event listeners
+        sock.ev.on('creds.update', saveCreds);
+        sock.ev.on('connection.update', (update) => handleConnectionUpdate(update));
+        sock.ev.on('messages.upsert', (msg) => handleMessage(msg));
+
+        console.log('Socket created and handlers attached.');
+
+    } catch (err) {
+        console.error("Error during bot start:", err);
+        isConnecting = false; // Reset flag on failure to allow retry
+        scheduleReconnect();
+    }
 }
 
 async function handleConnectionUpdate(update) {
@@ -117,31 +130,33 @@ async function handleConnectionUpdate(update) {
 
     if (connection === 'open') {
         console.log('✅ Connection opened!');
+        isConnecting = false; // Connection successful, reset the flag
         if (reconnectTimer) {
             clearTimeout(reconnectTimer);
             reconnectTimer = null;
         }
-        // Clean up QR file on successful connection
         try {
             await fs.promises.unlink(QR_FILE);
         } catch {}
     }
 
     if (connection === 'close') {
+        isConnecting = false; // Connection closed, allow a new attempt
         const statusCode = new Boom(lastDisconnect?.error)?.output?.statusCode;
         console.warn(`❌ Connection closed. Reason: ${DisconnectReason[statusCode] || 'Unknown'} (Code: ${statusCode})`);
 
-        // Stop and exit on critical, non-recoverable errors
         if (statusCode === DisconnectReason.loggedOut || statusCode === DisconnectReason.connectionReplaced || statusCode === DisconnectReason.multideviceMismatch) {
             console.error('Critical error. The bot will now exit.');
             if (statusCode === DisconnectReason.loggedOut) {
                 console.log('Cleaning authentication data...');
-                await fs.promises.rm(AUTH_FOLDER, { recursive: true, force: true }).catch(err => console.error("Failed to clean auth folder:", err));
+                // Use synchronous removal on critical exit path
+                if (fs.existsSync(AUTH_FOLDER)) {
+                    fs.rmSync(AUTH_FOLDER, { recursive: true, force: true });
+                }
             }
             // The lock will be released by the main process exit handler
             process.exit(1);
         }
-        // Handle recoverable errors (like 401 Unauthorized, 515 Bad Session) by retrying
         else {
             scheduleReconnect();
         }
@@ -157,7 +172,6 @@ function scheduleReconnect() {
     console.log(`Scheduling reconnect in ${delay / 1000} seconds...`);
     reconnectTimer = setTimeout(() => {
         reconnectTimer = null;
-        console.log('🔁 Attempting to reconnect...');
         startBot().catch(e => console.error('Reconnect failed:', e));
     }, delay);
 }
@@ -173,8 +187,6 @@ async function handleMessage({ messages }) {
         const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
         console.log(`📩 Message from ${sender}: ${text || '[Non-text message]'}`);
 
-        // --- Your existing message handling logic ---
-        // I've copied your functions here for completeness.
         const wasNewUser = isNewUser(sender);
         await saveMedia(msg, sock, sender);
         if (!text) return;
@@ -221,7 +233,6 @@ async function handleMessage({ messages }) {
             await sock.sendMessage(sender, { text: errorMessage });
             await saveChatHistory(sender, errorMessage, true);
         }
-        // --- End of your message handling logic ---
 
     } catch (err) {
         console.error('Error in message handler:', err);
@@ -304,6 +315,11 @@ async function saveMedia(msg, sockInstance, sender) {
 // --- Main Application Entry Point ---
 async function main() {
     try {
+        // Ensure the lockfile exists before trying to lock it, to prevent ENOENT errors on some systems.
+        if (!fs.existsSync(LOCK_FILE)) {
+            await fs.promises.writeFile(LOCK_FILE, '');
+        }
+
         // Acquire a lock to ensure single instance
         await lockfile.lock(LOCK_FILE, { retries: 0 });
         console.log('Lock acquired. Starting application.');
@@ -356,7 +372,6 @@ process.on('SIGTERM', gracefulShutdown);
 
 process.on('uncaughtException', (err) => {
     console.error('UNCAUGHT EXCEPTION:', err);
-    // Consider a clean shutdown here as the app is in an unstable state
     gracefulShutdown();
 });
 
