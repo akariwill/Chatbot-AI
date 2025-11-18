@@ -244,7 +244,7 @@ async function startSock() {
         try {
             // For returning users, add the salutation. For new users, we already welcomed them.
             const salutation = wasNewUser ? '' : getGreetingResponse(text, true) + ', ';
-            const response = await axios.post('https://akariwill.pythonanywhere.com/chat', { query: text });
+            const response = await axios.post('http://160.25.222.84:8001/chat', { query: text });
             const responseText = response.data.response.trim().replace(/^/gm, '👉 ');
             const friendlyOutput = `${salutation}${responseText}`.concat('\n\nKalau ada pertanyaan lain, tinggal chat aja ya 😊');
 

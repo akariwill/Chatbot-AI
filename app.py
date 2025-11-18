@@ -11,7 +11,7 @@ CORS(app)
 
 retriever, chat_model = initialize_chatbot()
 
-QR_FILE_PATH = './last_qr.txt'
+QR_FILE_PATH = '/tmp/last_qr.txt'
 
 
 @app.route("/", methods=["GET"])
