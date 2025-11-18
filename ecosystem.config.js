@@ -1,15 +1,14 @@
 module.exports = {
-  apps : [
+  apps: [
     {
       name: 'chatbot',
-      script: 'app.py',
+      script: '/home/noc/chatbot/app.py',
       interpreter: '/home/noc/chatbot/venv/bin/python3',
       cwd: '/home/noc/chatbot',
       watch: false,
       env: {
-        PYTHONPATH: '/home/noc/chatbot',
         OPENAI_API_KEY: process.env.OPENAI_API_KEY,
-        FLASK_ENV: "production"
+        FLASK_ENV: "production",
       }
     },
     {
