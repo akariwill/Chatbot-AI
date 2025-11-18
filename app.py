@@ -5,6 +5,7 @@ import os
 import qrcode
 import io
 import base64
+import tempfile
 
 from dotenv import load_dotenv
 
@@ -18,7 +19,7 @@ CORS(app)
 
 retriever, chat_model = initialize_chatbot()
 
-QR_FILE_PATH = '/tmp/last_qr.txt'
+QR_FILE_PATH = os.path.join(tempfile.gettempdir(), 'last_qr.txt')
 
 
 @app.route("/", methods=["GET"])
