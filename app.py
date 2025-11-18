@@ -6,6 +6,13 @@ import qrcode
 import io
 import base64
 
+from dotenv import load_dotenv
+
+dotenv_path = os.path.join(os.path.dirname(__file__), ".env")
+print("Loading .env from:", dotenv_path)
+load_dotenv(dotenv_path)
+
+
 app = Flask(__name__)
 CORS(app) 
 

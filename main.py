@@ -5,6 +5,12 @@ from utils.logger import setup_logger
 from chain.qa_chain import load_data, build_retriever, build_chat_model, build_prompt
 from utils.filter_utils import is_relevant_question
 
+from dotenv import load_dotenv
+
+dotenv_path = os.path.join(os.path.dirname(__file__), ".env")
+print("Loading .env from:", dotenv_path)
+load_dotenv(dotenv_path)
+
 
 retriever = None
 chat_model = None
