@@ -1,4 +1,4 @@
-// index.js – FIXED (no race condition, no error 515)
+// index.js – FINAL FIXED VERSION (race condition + reconnect + QR API)
 // Requires Node.js >= 16
 
 const {
@@ -14,25 +14,27 @@ const { Boom } = require("@hapi/boom");
 const P = require("pino");
 const axios = require("axios");
 const fs = require("fs");
-const util = require("util");
 const path = require("path");
 const http = require("http");
 const QRCode = require("qrcode");
 const os = require("os");
 
-// FIX: sock harus let, tidak boleh const!
+// FIX: sock harus "let" agar bisa di-reassign saat reconnect
 let sock = null;
 
 const QR_FILE = path.join(os.tmpdir(), "last_qr.txt");
 const AUTH_FOLDER = "./auth_info";
 
-// State locks
+// Control flags untuk mencegah double start
 let startPromise = null;
 let reconnectTimer = null;
 let connected = false;
 let lastStartAttempt = 0;
 
-// WEB SERVER QR API
+/* ===========================
+      QR API WEB SERVER
+=========================== */
+
 const server = http.createServer(async (req, res) => {
     if (req.url === "/api/qr") {
         try {
@@ -46,18 +48,18 @@ const server = http.createServer(async (req, res) => {
         }
     }
 
-    // serve static
-    let filePath = path.join(__dirname, "public", req.url === "/" ? "index.html" : req.url);
-    let ext = path.extname(filePath).toLowerCase();
-    let mime = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css" }[ext] || "text/plain";
+    // Serve static UI
+    const filePath = path.join(__dirname, "public", req.url === "/" ? "index.html" : req.url);
+    const ext = path.extname(filePath).toLowerCase();
+    const mime = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css" }[ext] || "text/plain";
 
-    fs.readFile(filePath, (err, content) => {
+    fs.readFile(filePath, (err, data) => {
         if (err) {
             res.writeHead(404);
             return res.end("Not Found");
         }
         res.writeHead(200, { "Content-Type": mime });
-        res.end(content);
+        res.end(data);
     });
 });
 
@@ -65,20 +67,27 @@ server.listen(3000, () => {
     console.log("Server running at http://160.25.222.84:3000/");
 });
 
-/* ===== CHAT HISTORY & UTILITIES ===== */
+/* ===========================
+        CHAT HISTORY
+=========================== */
 
 async function saveChatHistory(sender, message, isBot = false) {
-    const historyDir = path.join(__dirname, "chat_history");
-    if (!fs.existsSync(historyDir)) fs.mkdirSync(historyDir, { recursive: true });
+    const dir = path.join(__dirname, "chat_history");
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
-    const file = path.join(historyDir, `${sender.split("@")[0]}.log`);
+    const file = path.join(dir, `${sender.split("@")[0]}.log`);
     const ts = new Date().toLocaleString("id-ID", { timeZone: "Asia/Jakarta" });
+
     await fs.promises.appendFile(file, `[${ts}] ${isBot ? "Bot" : "User"}: ${message}\n`);
 }
 
 function isNewUser(sender) {
     return !fs.existsSync(path.join(__dirname, "chat_history", `${sender.split("@")[0]}.log`));
 }
+
+/* ===========================
+       RESPON OTOMATIS
+=========================== */
 
 function getGreetingResponse(text, force = false) {
     const g = ["hi", "halo", "hai", "p", "permisi", "assalamualaikum", "selamat pagi", "selamat siang", "selamat sore", "selamat malam"];
@@ -91,12 +100,12 @@ function getGreetingResponse(text, force = false) {
     if (g.includes(n))
         return `${s} juga! 😊 Ada yang bisa aku bantu?\n\nCoba tanyakan:\n- Paket WiFi\n- Cara bayar\n- Nomor teknisi\n`;
 
-    if (force) return s;
-    return null;
+    return force ? s : null;
 }
 
 function getInfoResponse(text) {
     const t = text.toLowerCase();
+
     if (t.includes("alamat"))
         return `📍 Lokasi kantor:\nPT. Telemedia Prima Nusantara\nhttps://www.google.com/maps/place/PT.+Telemedia+Prima+Nusantara/`;
 
@@ -106,12 +115,17 @@ function getInfoResponse(text) {
     return null;
 }
 
+/* ===========================
+      SAVE MEDIA USER
+=========================== */
+
 async function saveMedia(msg, sock, sender) {
     if (!msg.message) return;
 
     const type = Object.keys(msg.message).find(x =>
         ["imageMessage", "videoMessage", "documentMessage", "audioMessage", "locationMessage"].includes(x)
     );
+
     if (!type) return;
 
     const folder = path.join(__dirname, "media", sender.replace(/[@:\.]/g, "_"));
@@ -127,22 +141,25 @@ async function saveMedia(msg, sock, sender) {
     }
 
     const buffer = await downloadMediaMessage(msg, "buffer", {}, { logger: P({ level: "silent" }) });
-    const ext = type === "imageMessage" ? ".jpg" :
-                type === "videoMessage" ? ".mp4" :
-                type === "audioMessage" ? ".mp3" : "";
 
-    const file = path.join(folder, Date.now() + ext);
-    fs.writeFileSync(file, buffer);
+    const ext = type === "imageMessage" ? ".jpg"
+        : type === "videoMessage" ? ".mp4"
+            : type === "audioMessage" ? ".mp3"
+                : "";
+
+    const f = path.join(folder, Date.now() + ext);
+    fs.writeFileSync(f, buffer);
 }
 
-
-/* ===== START SOCKET WITH MUTEX ===== */
+/* ===========================
+        START SOCKET SAFE
+=========================== */
 
 async function startSock() {
-
     if (startPromise) return startPromise;
 
     startPromise = (async () => {
+
         if (Date.now() - lastStartAttempt < 1500)
             await new Promise(r => setTimeout(r, 1500));
         lastStartAttempt = Date.now();
@@ -160,12 +177,17 @@ async function startSock() {
 
             sock = makeWASocket({
                 version,
-                auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, P({ level: "silent" })) },
+                auth: {
+                    creds: state.creds,
+                    keys: makeCacheableSignalKeyStore(state.keys, P({ level: "silent" }))
+                },
                 printQRInTerminal: false,
                 logger: P({ level: "silent" }),
             });
 
             sock.ev.on("creds.update", saveCreds);
+
+            /* ======================= MESSAGE RECEIVED ======================= */
 
             sock.ev.on("messages.upsert", async ({ messages }) => {
                 const msg = messages[0];
@@ -174,9 +196,10 @@ async function startSock() {
                 const sender = msg.key.remoteJid;
                 if (sender.endsWith("@g.us")) return;
 
-                const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || "";
-                if (!text) return;
+                const text = msg.message?.conversation ||
+                    msg.message?.extendedTextMessage?.text || "";
 
+                await saveMedia(msg, sock, sender);
                 await saveChatHistory(sender, text);
 
                 const newUser = isNewUser(sender);
@@ -201,7 +224,6 @@ async function startSock() {
                 try {
                     const res = await axios.post("http://160.25.222.84:8001/chat", { query: text });
                     const answer = res.data.response || "Maaf, saya tidak memahami pertanyaan Anda.";
-
                     await sock.sendMessage(sender, { text: answer });
                     await saveChatHistory(sender, answer, true);
                 } catch (e) {
@@ -209,7 +231,9 @@ async function startSock() {
                 }
             });
 
-            sock.ev.on("connection.update", async ({ connection, lastDisconnect, qr }) => {
+            /* ======================= CONNECTION UPDATE ====================== */
+
+            sock.ev.on("connection.update", ({ connection, lastDisconnect, qr }) => {
                 if (qr) fs.writeFileSync(QR_FILE, qr);
 
                 if (connection === "open") {
@@ -248,7 +272,9 @@ async function startSock() {
     return startPromise;
 }
 
-process.on("SIGINT", () => process.exit(0));
+/* ===========================
+       START ON RUN
+=========================== */
 
-// Start immediately
+process.on("SIGINT", () => process.exit(0));
 startSock();
