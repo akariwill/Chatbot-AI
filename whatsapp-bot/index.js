@@ -61,8 +61,8 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(3000, () => {
-    console.log('Server listening on http://localhost:3000');
-    console.log('QR code will be available at http://localhost:3000');
+    console.log('Server listening on port 3000. Access it via http://<YOUR_SERVER_IP>:3000');
+    console.log('QR code will be available on the website.');
 });
 
 
@@ -271,6 +271,9 @@ async function startSock() {
         }
 
         if (connection === 'close') {
+            const reason = new Boom(lastDisconnect.error)?.output.statusCode;
+            console.error(`Connection closed. Reason: ${reason}`, util.inspect(lastDisconnect.error, { depth: null }));
+
             // If connection closed, the QR is no longer valid.
             try {
                 await fs.promises.unlink(QR_FILE);
@@ -280,9 +283,13 @@ async function startSock() {
                 }
             }
 
-            const shouldReconnect = lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut;
+            const shouldReconnect = reason !== DisconnectReason.loggedOut;
+            console.log(`Should reconnect: ${shouldReconnect}`);
             if (shouldReconnect) {
+                console.log("Attempting to reconnect...");
                 startSock();
+            } else {
+                console.log("Not reconnecting because user logged out.");
             }
         } else if (connection === 'open') {
             // Connection is open, QR is no longer needed.

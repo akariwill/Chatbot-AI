@@ -10,7 +10,7 @@ export default async function handler(req, res) {
 
         if (!query) return res.status(400).json({ error: "Query required" });
 
-        const response = await fetch("https://akariwill.pythonanywhere.com/chat", {
+        const response = await fetch("http://160.25.222.84:8001/chat", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ query }),
