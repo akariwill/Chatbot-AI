@@ -236,12 +236,11 @@ async function startSock() {
                 if (fs.existsSync(authInfoDir)) {
                     fs.rmSync(authInfoDir, { recursive: true, force: true });
                 }
-                // Restart the process to generate a new QR code
+                startSock();
+            } else if (statusCode === DisconnectReason.restartRequired) {
+                console.log('🔌 Koneksi terputus karena memerlukan restart, memulai ulang secara otomatis...');
                 startSock();
             } else {
-                // For all other disconnect reasons, log it and let Baileys handle the reconnection automatically.
-                // Do NOT call startSock() here as it creates a conflicting new session.
-                const shouldReconnect = statusCode !== DisconnectReason.restartRequired;
                 console.log(`🔌 Koneksi terputus karena: ${lastDisconnect.error?.message}. Baileys akan mencoba menyambungkan kembali.`);
             }
         } else if (connection === 'open') {
