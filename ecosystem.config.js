@@ -1,26 +1,25 @@
 module.exports = {
   apps : [
     {
-      name: "chatbot",
-      script: "app.py",
-      cwd: "/home/noc/chatbot",
-      interpreter: "/home/noc/chatbot/venv/bin/python3",
+      name: 'chatbot',
+      script: 'app.py',
+      interpreter: '/home/noc/chatbot/venv/bin/python3',
+      cwd: '/home/noc/chatbot',
       watch: false,
       env: {
-        NODE_ENV: "production",
+        PYTHONPATH: '/home/noc/chatbot',
         OPENAI_API_KEY: process.env.OPENAI_API_KEY,
-        LANGCHAIN_TRACING_V2: "false"
+        FLASK_ENV: "production"
       }
     },
     {
-      name: "whatsapp-bot",
-      script: "index.js",
-      cwd: "/home/noc/chatbot/whatsapp-bot",
+      name: 'whatsapp-bot',
+      script: 'index.js',
+      cwd: '/home/noc/chatbot/whatsapp-bot',
       watch: false,
-      autorestart: true, 
+      autorestart: true,
       env: {
-        NODE_ENV: "production",
-        CHATBOT_API_URL: "http://160.25.222.84:8001/chat"
+        NODE_ENV: "production"
       }
     }
   ]
