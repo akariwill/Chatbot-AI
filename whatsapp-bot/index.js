@@ -213,18 +213,29 @@ async function startSock() {
     });
 
     sock.ev.on('connection.update', (update) => {
-        const { connection, lastDisconnect } = update;
-        if (connection === 'close') {
-            const shouldReconnect =
-                lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut;
-            console.log('Koneksi terputus. Reconnect?', shouldReconnect);
+    const { connection, lastDisconnect } = update;
+    if (connection === 'close') {
+        const statusCode = lastDisconnect.error?.output?.statusCode;
+        if (statusCode === DisconnectReason.loggedOut) {
+            console.log('❌ Koneksi terputus: Logged Out. Menghapus info sesi dan memulai ulang...');
+            // Hapus folder auth_info untuk memulai sesi baru
+            const authInfoDir = path.join(__dirname, 'auth_info');
+            if (fs.existsSync(authInfoDir)) {
+                fs.rmSync(authInfoDir, { recursive: true, force: true });
+            }
+            // Mulai ulang untuk mendapatkan QR baru
+            startSock();
+        } else {
+            const shouldReconnect = statusCode !== DisconnectReason.restartRequired;
+            console.log(`🔌 Koneksi terputus karena: ${lastDisconnect.error?.message}. Coba sambungkan kembali? ${shouldReconnect}`);
             if (shouldReconnect) {
                 startSock();
             }
-        } else if (connection === 'open') {
-            console.log('✅ Terhubung ke WhatsApp!');
         }
-    });
+    } else if (connection === 'open') {
+        console.log('✅ Terhubung ke WhatsApp!');
+    }
+});
 }
 
 startSock();
