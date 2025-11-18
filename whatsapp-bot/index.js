@@ -20,14 +20,10 @@ const http = require('http');
 const QRCode = require('qrcode');
 const os = require('os');
 
-const sock = makeWASocket({
-  browser: ["Chrome (Linux)", "Chrome", "110.0"],
-  printQRInTerminal: false
-});
-
 const QR_FILE = path.join(os.tmpdir(), 'last_qr.txt');
 const AUTH_FOLDER = './auth_info';
 
+let sock = null;
 
 // state guards to avoid race-condition / duplicate starts
 let startPromise = null;      // promise of the ongoing start operation (mutex)
