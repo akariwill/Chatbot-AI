@@ -1,24 +1,26 @@
 module.exports = {
-  apps : [
+  apps: [
     {
-      name: 'chatbot',
-      script: '/home/noc/chatbot/app.py',
-      interpreter: '/home/noc/chatbot/venv/bin/python3',
-      cwd: '/home/noc/chatbot',
+      name: "chatbot",
+      script: "app.py",
+      interpreter: "/home/noc/chatbot/venv/bin/python3",  
+      cwd: "/home/noc/chatbot",
       watch: false,
       env: {
-        OPENAI_API_KEY: process.env.OPENAI_API_KEY
+        NODE_ENV: "production",
+        OPENAI_API_KEY: "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"    
       }
     },
     {
-      name: 'whatsapp-bot',
-      script: 'index.js',
-      cwd: '/home/noc/chatbot/whatsapp-bot',
+      name: "whatsapp-bot",
+      script: "index.js",
+      cwd: "/home/noc/chatbot/whatsapp-bot",
       watch: false,
-      autorestart: true,
+      autorestart: false,
       env: {
-        NODE_ENV: "production"
+        NODE_ENV: "production",
+        OPENAI_API_KEY: "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"    
       }
     }
   ]
-};
+}
