@@ -219,24 +219,22 @@ async function startSock() {
 
         if (connection === 'close') {
             qrCode = undefined;
-            const statusCode = lastDisconnect.error?.output?.statusCode;
-            const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+            connectionStatus = 'DISCONNECTED';
             
-            if(shouldReconnect){
-                connectionStatus = 'DISCONNECTED';
-                console.log(`🔌 Koneksi terputus: ${lastDisconnect.error?.message}. Mencoba menyambungkan kembali...`);
-            } else {
-                connectionStatus = 'DISCONNECTED';
-                console.log('🔌 Koneksi terputus permanen: Logged Out. Hapus sesi dan mulai ulang.');
+            const reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
+
+            if (reason === DisconnectReason.loggedOut) {
+                console.log('🔌 Koneksi terputus permanen: Logged Out. Hapus sesi dan mulai ulang...');
                 const authInfoDir = path.join(__dirname, 'auth_info');
                 if (fs.existsSync(authInfoDir)) {
                     fs.rmSync(authInfoDir, { recursive: true, force: true });
                 }
+            } else {
+                 console.log(`🔌 Koneksi terputus: ${lastDisconnect.error?.message}. Mencoba menyambungkan kembali...`);
             }
 
-            if (shouldReconnect) {
-                startSock();
-            }
+            // Always attempt to restart the connection on any close event
+            startSock();
 
         } else if (connection === 'open') {
             qrCode = undefined;
