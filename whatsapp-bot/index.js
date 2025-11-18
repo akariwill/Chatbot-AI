@@ -201,59 +201,53 @@ async function startSock() {
         try {
             // For returning users, add the salutation. For new users, we already welcomed them.
             const salutation = wasNewUser ? '' : getGreetingResponse(text, true) + ', ';
-                        const response = await axios.post('http://160.25.222.84:8001/chat', { query: text });
-                        const responseText = response.data.response.trim().replace(/^/gm, '👉 ');
-                        const friendlyOutput = `${salutation}${responseText}`.concat('\n\nKalau ada pertanyaan lain, tinggal chat aja ya 😊');
-            
-                        await sock.sendMessage(sender, { text: friendlyOutput });
-                        await saveChatHistory(sender, friendlyOutput, true);
-                    } catch (error) {
-                        console.error('❌ Error dari Python API:', error.message);
-                        const errorMessage = 'Maaf, terjadi kesalahan saat memproses permintaan Anda. Silakan coba lagi nanti.';
-                        await sock.sendMessage(sender, { text: errorMessage });
-                        await saveChatHistory(sender, errorMessage, true);
-                    }
-                });
-            
-                sock.ev.on('connection.update', async (update) => {
-                    const { connection, lastDisconnect, qr } = update;
-            
-                            if (qr) {
-                                console.log('큐알 코드 받음, 파일에 저장 중');
-                                const qrFilePath = path.join(os.tmpdir(), 'last_qr.txt');
-                                try {
-                                    await fs.promises.writeFile(qrFilePath, qr);
-                                    console.log('✅ QR 코드가 성공적으로 파일에 저장되었습니다.');
-                                } catch (err) {
-                                    console.error('❌ QR 코드를 파일에 저장하는 데 실패했습니다:', err);
-                                }
-                            }            
-                    if (connection === 'close') {
-                        const statusCode = lastDisconnect.error?.output?.statusCode;
-                        if (statusCode === DisconnectReason.loggedOut) {
-                            console.log('❌ Koneksi terputus: Logged Out. Menghapus info sesi dan memulai ulang...');
-                            const authInfoDir = path.join(__dirname, 'auth_info');
-                            if (fs.existsSync(authInfoDir)) {
-                                fs.rmSync(authInfoDir, { recursive: true, force: true });
-                            }
-                            startSock();
-                        } else {
-                            const shouldReconnect = statusCode !== DisconnectReason.restartRequired;
-                            console.log(`🔌 Koneksi terputus karena: ${lastDisconnect.error?.message}. Coba sambungkan kembali? ${shouldReconnect}`);
-                            if (shouldReconnect) {
-                                startSock();
-                            }
-                        }
-                    } else if (connection === 'open') {
-                        console.log('✅ Terhubung ke WhatsApp!');
-                    }
-                });}const express = require('express');
-const qrcode = require('qrcode');
+            const response = await axios.post('http://160.25.222.84:8001/chat', { query: text });
+            const responseText = response.data.response.trim().replace(/^/gm, '👉 ');
+            const friendlyOutput = `${salutation}${responseText}`.concat('\n\nKalau ada pertanyaan lain, tinggal chat aja ya 😊');
 
-// ... (existing code)
+            await sock.sendMessage(sender, { text: friendlyOutput });
+            await saveChatHistory(sender, friendlyOutput, true);
+        } catch (error) {
+            console.error('❌ Error dari Python API:', error.message);
+            const errorMessage = 'Maaf, terjadi kesalahan saat memproses permintaan Anda. Silakan coba lagi nanti.';
+            await sock.sendMessage(sender, { text: errorMessage });
+            await saveChatHistory(sender, errorMessage, true);
+        }
+    });
 
-async function startSock() {
-    // ... (existing sock creation and event handling)
+    sock.ev.on('connection.update', async (update) => {
+        const { connection, lastDisconnect, qr } = update;
+
+        if (qr) {
+            console.log('큐알 코드 받음, 파일에 저장 중');
+            const qrFilePath = path.join(os.tmpdir(), 'last_qr.txt');
+            try {
+                await fs.promises.writeFile(qrFilePath, qr);
+                console.log('✅ QR 코드가 성공적으로 파일에 저장되었습니다.');
+            } catch (err) {
+                console.error('❌ QR 코드를 파일에 저장하는 데 실패했습니다:', err);
+            }
+        }
+        if (connection === 'close') {
+            const statusCode = lastDisconnect.error?.output?.statusCode;
+            if (statusCode === DisconnectReason.loggedOut) {
+                console.log('❌ Koneksi terputus: Logged Out. Menghapus info sesi dan memulai ulang...');
+                const authInfoDir = path.join(__dirname, 'auth_info');
+                if (fs.existsSync(authInfoDir)) {
+                    fs.rmSync(authInfoDir, { recursive: true, force: true });
+                }
+                startSock();
+            } else {
+                const shouldReconnect = statusCode !== DisconnectReason.restartRequired;
+                console.log(`🔌 Koneksi terputus karena: ${lastDisconnect.error?.message}. Coba sambungkan kembali? ${shouldReconnect}`);
+                if (shouldReconnect) {
+                    startSock();
+                }
+            }
+        } else if (connection === 'open') {
+            console.log('✅ Terhubung ke WhatsApp!');
+        }
+    });
 }
 
 // Create Express app
