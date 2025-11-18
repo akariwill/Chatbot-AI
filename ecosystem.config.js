@@ -1,5 +1,5 @@
 module.exports = {
-  apps: [
+  apps : [
     {
       name: 'chatbot',
       script: '/home/noc/chatbot/app.py',
@@ -7,8 +7,7 @@ module.exports = {
       cwd: '/home/noc/chatbot',
       watch: false,
       env: {
-        OPENAI_API_KEY: process.env.OPENAI_API_KEY,
-        FLASK_ENV: "production",
+        OPENAI_API_KEY: process.env.OPENAI_API_KEY
       }
     },
     {
