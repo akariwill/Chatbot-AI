@@ -1,85 +1,91 @@
-# Perintah untuk Menjalankan Chatbot & WhatsApp Bot
+# 🚀 **Panduan Menjalankan Aplikasi dengan PM2 & Ecosystem File**
 
-Berikut adalah langkah-langkah untuk menjalankan kedua server di dalam sesi `tmux` di server SSH Anda.
-
----
-
-### Bagian 1: Menjalankan Server Chatbot (Python)
-
-1.  **Mulai sesi tmux baru:**
-    ```bash
-    tmux new -s chatbot
-    ```
-
-2.  **Masuk ke direktori proyek:**
-    ```bash
-    cd /path/to/your/project
-    ```
-    *(Ganti `/path/to/your/project` dengan path direktori proyek Anda)*
-
-3.  **Buat dan aktifkan virtual environment:**
-    ```bash
-    python3 -m venv venv
-    source venv/bin/activate
-    ```
-
-4.  **Install dependencies:**
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-5.  **Jalankan server chatbot:**
-    ```bash
-    python3 app.py
-    ```
-    *Server ini akan berjalan di port 8001.*
+Dokumen ini menjelaskan cara menjalankan **server chatbot (Python)** dan **WhatsApp bot (Node.js)** menggunakan file konfigurasi `ecosystem.config.js` untuk manajemen yang lebih mudah dan rapi.
 
 ---
 
-### Bagian 2: Menjalankan WhatsApp Bot (Node.js)
+# ✅ Langkah 1: Konfigurasi Awal (Hanya dilakukan sekali)
 
-Agar QR code muncul, Anda **juga harus menjalankan server WhatsApp Bot**.
+### 1. Edit File `ecosystem.config.js`
+Buka file `ecosystem.config.js` yang ada di direktori utama proyek Anda. **Anda wajib mengubah** baris `cwd` (current working directory) agar sesuai dengan path absolut (path lengkap) ke direktori proyek Anda di server.
 
-1.  **Buka jendela baru di dalam tmux:**
-    Tekan `Ctrl+b` lalu `c`. Ini akan membuat jendela terminal baru di dalam sesi `tmux` yang sama.
+Contoh:
+```javascript
+// ...
+cwd: '/home/noc/chatbot/', // <-- GANTI DENGAN PATH PROYEK ANDA
+// ...
+cwd: '/home/noc/chatbot/whatsapp-bot/', // <-- GANTI DENGAN PATH PROYEK ANDA
+// ...
+```
 
-2.  **Masuk ke direktori WhatsApp Bot:**
-    ```bash
-    cd /path/to/your/project/whatsapp-bot
-    ```
-    *(Sesuaikan path jika perlu)*
+### 2. Install Dependencies
+Pastikan semua dependensi untuk kedua aplikasi sudah ter-install.
 
-3.  **Install dependencies Node.js:**
-    ```bash
-    npm install
-    ```
+**Untuk Server Python:**
+```bash
+cd /path/to/your/project
+python3 -m venv venv # Buat virtual env jika belum ada
+source venv/bin/activate
+pip install -r requirements.txt
+deactivate
+```
 
-4.  **Jalankan WhatsApp Bot:**
-    ```bash
-    node index.js
-    ```
-    *Server ini akan berjalan di port 3000 dan akan menghasilkan file QR code.*
-
----
-
-### Mengakses Aplikasi
-
--   **Chatbot API** akan tersedia di `http://<IP_SERVER_ANDA>:8001`.
--   **Website WhatsApp QR Code** akan tersedia di `http://<IP_SERVER_ANDA>:3000`.
-
-Anda dapat berpindah antar jendela di `tmux` dengan menekan `Ctrl+b` lalu `0` (untuk jendela pertama) atau `Ctrl+b` lalu `1` (untuk jendela kedua).
-
-Untuk keluar dari sesi SSH tanpa mematikan server, tekan `Ctrl+b` lalu `d`.
+**Untuk WhatsApp Bot:**
+```bash
+cd /path/to/your/project/whatsapp-bot
+npm install
+```
 
 ---
 
-### Troubleshooting: Masalah Koneksi Setelah Scan QR
+# ✅ Langkah 2: Menjalankan Aplikasi
 
-Jika Anda mengalami error koneksi setelah scan QR (bot mencoba menyambung ulang terus-menerus), coba langkah berikut:
+### 1. Hapus Proses PM2 Lama & Sesi WhatsApp (PENTING untuk memulai dari awal)
+Dari direktori utama proyek Anda, jalankan:
+```bash
+# Hentikan dan hapus semua proses yang di-manage PM2
+pm2 delete all
 
-1.  **Hentikan server WhatsApp Bot** (tekan `Ctrl+c` di jendela tmux-nya).
-2.  **Hapus folder `auth_info`** yang ada di dalam direktori `whatsapp-bot`. Folder ini menyimpan sesi login Anda. Menghapusnya akan memaksa Anda untuk scan QR baru, dan seringkali ini menyelesaikan masalah koneksi.
-    ```bash
-    rm -rf /path/to/your/project/whatsapp-bot/auth_info
-    ```
-3.  **Jalankan kembali server WhatsApp Bot** dengan `node index.js`. Anda akan diminta untuk scan QR code yang baru.
+# Hapus folder sesi WhatsApp yang lama/rusak
+rm -rf ./whatsapp-bot/auth_info
+```
+
+### 2. Mulai Semua Aplikasi dengan Satu Perintah
+Dari direktori utama proyek Anda (tempat `ecosystem.config.js` berada), jalankan:
+```bash
+pm2 start ecosystem.config.js
+```
+PM2 akan secara otomatis menjalankan kedua aplikasi (`chatbot` dan `whatsapp-bot`) sesuai konfigurasi.
+
+### 3. Lihat Log untuk Scan QR
+Untuk melihat log dari bot WhatsApp dan men-scan QR code, jalankan:
+```bash
+pm2 logs whatsapp-bot
+```
+*(Tekan `Ctrl+c` untuk keluar dari tampilan log)*
+
+---
+
+# ♻️ **Auto-start Setelah Reboot (WAJIB)**
+
+Agar kedua aplikasi otomatis berjalan setelah server reboot:
+```bash
+# Simpan konfigurasi proses dari ecosystem file
+pm2 save
+
+# Buat skrip startup untuk server Anda
+pm2 startup
+```
+*(Ikuti instruksi yang muncul di layar untuk perintah `startup`)*
+
+---
+
+# 🧹 Perintah Berguna untuk PM2
+
+| Keperluan        | Perintah                               |
+| ------------------ | -------------------------------------- |
+| Lihat status semua | `pm2 ls`                               |
+| Lihat log spesifik | `pm2 logs chatbot` atau `pm2 logs whatsapp-bot` |
+| Restart aplikasi   | `pm2 restart chatbot` atau `pm2 restart whatsapp-bot` |
+| Stop aplikasi      | `pm2 stop all` atau `pm2 stop chatbot` |
+| Hapus semua        | `pm2 delete all`                       |
