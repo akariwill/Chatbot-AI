@@ -36,11 +36,11 @@ app.get('/api/qr', async (req, res) => {
             const qrDataUrl = await qrcode.toDataURL(qrCode);
             res.json({ qr: qrDataUrl });
         } catch (err) {
-            console.error('❌ Gagal membuat QR code data URL:', err);
-            res.status(500).json({ error: 'Gagal memproses QR code' });
+            console.error('❌ QRコードのデータURL作成に失敗しました:', err);
+            res.status(500).json({ error: 'QRコードの処理に失敗しました' });
         }
     } else {
-        res.status(404).json({ error: 'QR code tidak tersedia' });
+        res.status(404).json({ error: 'QRコードは利用できません' });
     }
 });
 
@@ -49,7 +49,7 @@ app.post('/api/logout', async (req, res) => {
         try {
             await sock.logout();
         } catch (err) {
-            console.error('❌ Gagal logout dari socket:', err);
+            console.error('❌ ソケットからのログアウトに失敗しました:', err);
         }
     }
 
@@ -59,8 +59,8 @@ app.post('/api/logout', async (req, res) => {
     }
 
     connectionStatus = 'DISCONNECTED';
-    console.log('✅ Berhasil logout, memulai ulang koneksi.');
-    res.json({ message: 'Logout berhasil, silahkan refresh halaman.' });
+    console.log('✅ 正常にログアウトし、接続を再開します。');
+    res.json({ message: 'ログアウトに成功しました。ページを更新してください。' });
     // The connection.update handler will automatically call startSock() on loggedOut disconnect
 });
 
@@ -75,7 +75,7 @@ async function saveChatHistory(sender, message, isBot = false) {
     try {
         await fs.promises.appendFile(logFile, logMessage);
     } catch (error) {
-        console.error('❌ Gagal menyimpan riwayat chat:', error);
+        console.error('❌ チャット履歴の保存に失敗しました:', error);
     }
 }
 
@@ -123,7 +123,7 @@ async function saveMedia(msg, sockInstance, sender) {
         fileName = 'location_' + Date.now() + '.json';
         const locationData = { latitude: mediaMessage.degreesLatitude, longitude: mediaMessage.degreesLongitude, name: mediaMessage.name || '', address: mediaMessage.address || '' };
         fs.writeFileSync(path.join(folderPath, fileName), JSON.stringify(locationData, null, 2));
-        console.log(`📍 Lokasi dari ${sender} disimpan.`);
+        console.log(`📍 ${sender} からの場所が保存されました。`);
         return;
     }
     const stream = await downloadMediaMessage(msg, "buffer", {}, { logger: P({ level: 'silent' }), reuploadRequest: sockInstance.updateMediaMessage });
@@ -136,14 +136,14 @@ async function saveMedia(msg, sockInstance, sender) {
     if (fileName) {
         const filePath = path.join(folderPath, fileName);
         fs.writeFileSync(filePath, stream);
-        console.log(`💾 ${mediaType} dari ${sender} disimpan sebagai ${fileName}`);
+        console.log(`💾 ${sender} からの ${mediaType} は ${fileName} として保存されました。`);
     }
 }
 
 // --- Baileys Connection Logic ---
 async function startSock() {
     connectionStatus = 'CONNECTING';
-    console.log('🚀 Memulai koneksi socket...');
+    console.log('🚀 ソケット接続を開始しています...');
     const { state, saveCreds } = await useMultiFileAuthState('./auth_info');
     const { version } = await fetchLatestBaileysVersion();
 
@@ -169,7 +169,7 @@ async function startSock() {
         const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
         if (!text) return;
         await saveChatHistory(sender, text);
-        console.log(`📩 Pesan diterima dari ${sender}: ${text}`);
+        console.log(`📩 ${sender} からメッセージを受信しました: ${text}`);
         if (wasNewUser) {
             const welcomeMessage = `Selamat datang di Layanan Pelanggan WiFi! 👋\n\nSaya adalah asisten virtual yang siap membantu Anda dengan berbagai pertanyaan seputar layanan kami.`;
             await sock.sendMessage(sender, { text: welcomeMessage });
@@ -201,7 +201,7 @@ async function startSock() {
             await sock.sendMessage(sender, { text: friendlyOutput });
             await saveChatHistory(sender, friendlyOutput, true);
         } catch (error) {
-            console.error('❌ Error dari Python API:', error.message);
+            console.error('❌ Python APIからのエラー:', error.message);
             const errorMessage = 'Maaf, terjadi kesalahan saat memproses permintaan Anda. Silakan coba lagi nanti.';
             await sock.sendMessage(sender, { text: errorMessage });
             await saveChatHistory(sender, errorMessage, true);
@@ -214,7 +214,7 @@ async function startSock() {
         if (qr) {
             qrCode = qr;
             connectionStatus = 'WAITING_FOR_QR';
-            console.log('✅ QR Code diterima, tunggu pemindaian.');
+            console.log('✅ QRコードを受信しました。スキャンをお待ちください。');
         }
 
         if (connection === 'close') {
@@ -224,13 +224,13 @@ async function startSock() {
             const reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
 
             if (reason === DisconnectReason.loggedOut) {
-                console.log('🔌 Koneksi terputus permanen: Logged Out. Hapus sesi dan mulai ulang...');
+                console.log('🔌 接続が永久に切断されました: ログアウト。セッションを削除して再起動します...');
                 const authInfoDir = path.join(__dirname, 'auth_info');
                 if (fs.existsSync(authInfoDir)) {
                     fs.rmSync(authInfoDir, { recursive: true, force: true });
                 }
             } else {
-                 console.log(`🔌 Koneksi terputus: ${lastDisconnect.error?.message}. Mencoba menyambungkan kembali...`);
+                 console.log(`🔌 接続が切断されました: ${lastDisconnect.error?.message}。再接続を試みています...`);
             }
 
             // Always attempt to restart the connection on any close event
@@ -239,14 +239,14 @@ async function startSock() {
         } else if (connection === 'open') {
             qrCode = undefined;
             connectionStatus = 'CONNECTED';
-            console.log('✅ Terhubung ke WhatsApp!');
+            console.log('✅ WhatsAppに接続しました！');
         }
     });
 }
 
 // --- Start Application ---
 app.listen(port, () => {
-    console.log(`✅ Website berjalan di http://localhost:${port}`);
+    console.log(`✅ ウェブサイトは http://localhost:${port} で実行中です`);
     // Start the bot after the server is running
     startSock();
 });

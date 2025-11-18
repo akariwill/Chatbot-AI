@@ -10,7 +10,7 @@ import tempfile
 from dotenv import load_dotenv
 
 dotenv_path = os.path.join(os.path.dirname(__file__), ".env")
-print("Loading .env from:", dotenv_path)
+print(".env を読み込んでいます:", dotenv_path)
 load_dotenv(dotenv_path)
 
 
