@@ -236,13 +236,13 @@ async function startSock() {
                 if (fs.existsSync(authInfoDir)) {
                     fs.rmSync(authInfoDir, { recursive: true, force: true });
                 }
+                // Restart the process to generate a new QR code
                 startSock();
             } else {
+                // For all other disconnect reasons, log it and let Baileys handle the reconnection automatically.
+                // Do NOT call startSock() here as it creates a conflicting new session.
                 const shouldReconnect = statusCode !== DisconnectReason.restartRequired;
-                console.log(`🔌 Koneksi terputus karena: ${lastDisconnect.error?.message}. Coba sambungkan kembali? ${shouldReconnect}`);
-                if (shouldReconnect) {
-                    startSock();
-                }
+                console.log(`🔌 Koneksi terputus karena: ${lastDisconnect.error?.message}. Baileys akan mencoba menyambungkan kembali.`);
             }
         } else if (connection === 'open') {
             console.log('✅ Terhubung ke WhatsApp!');
