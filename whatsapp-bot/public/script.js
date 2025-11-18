@@ -1,42 +1,85 @@
 document.addEventListener('DOMContentLoaded', () => {
-    const qrImage = document.getElementById('qrImage');
-    const qrCodeContainer = document.getElementById('qrCodeContainer');
-    const status = document.getElementById('status');
+    const statusText = document.getElementById('status-text');
+    const qrContainer = document.getElementById('qr-container');
+    const qrImage = document.getElementById('qr-image');
+    const loginView = document.getElementById('login-view');
+    const dashboardView = document.getElementById('dashboard-view');
+    const logoutButton = document.getElementById('logout-button');
 
-    function showLoader() {
-        const loader = document.createElement('div');
-        loader.className = 'loader';
-        qrCodeContainer.appendChild(loader);
-        qrImage.classList.remove('loaded');
-    }
+    let statusInterval;
 
-    function hideLoader() {
-        const loader = qrCodeContainer.querySelector('.loader');
-        if (loader) {
-            loader.remove();
-        }
-        qrImage.classList.add('loaded');
-    }
-
-    async function fetchQR() {
-        showLoader();
-        status.textContent = 'Fetching new QR code...';
+    const fetchQrCode = async () => {
         try {
-            const res = await fetch("/api/qr");
-            const data = await res.json();
-            if (data.qr) {
+            const response = await fetch('/api/qr');
+            if (response.ok) {
+                const data = await response.json();
                 qrImage.src = data.qr;
-                status.textContent = 'QR code loaded. Please scan.';
-                hideLoader();
+                qrContainer.style.display = 'block';
             } else {
-                status.textContent = 'Could not fetch QR code. Retrying...';
+                qrContainer.style.display = 'none';
             }
-        } catch (err) {
-            console.error(err);
-            status.textContent = 'Error fetching QR code. Check console for details.';
+        } catch (error) {
+            console.error('Error fetching QR code:', error);
+            qrContainer.style.display = 'none';
         }
-    }
+    };
 
-    fetchQR();
-    setInterval(fetchQR, 15000);
+    const checkStatus = async () => {
+        try {
+            const response = await fetch('/api/status');
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            const data = await response.json();
+
+            switch (data.status) {
+                case 'CONNECTED':
+                    loginView.style.display = 'none';
+                    dashboardView.style.display = 'block';
+                    // Stop polling when connected
+                    if (statusInterval) clearInterval(statusInterval);
+                    break;
+
+                case 'WAITING_FOR_QR':
+                    dashboardView.style.display = 'none';
+                    loginView.style.display = 'block';
+                    statusText.textContent = 'Waiting for QR Code Scan...';
+                    await fetchQrCode();
+                    break;
+
+                case 'CONNECTING':
+                    dashboardView.style.display = 'none';
+                    loginView.style.display = 'block';
+                    qrContainer.style.display = 'none';
+                    statusText.textContent = 'Connecting...';
+                    break;
+
+                case 'DISCONNECTED':
+                default:
+                    dashboardView.style.display = 'none';
+                    loginView.style.display = 'block';
+                    qrContainer.style.display = 'none';
+                    statusText.textContent = 'Disconnected. Attempting to reconnect...';
+                    break;
+            }
+        } catch (error) {
+            console.error('Error fetching status:', error);
+            statusText.textContent = 'Error: Could not connect to the server.';
+        }
+    };
+
+    logoutButton.addEventListener('click', async () => {
+        try {
+            await fetch('/api/logout', { method: 'POST' });
+            alert('Logged out successfully. The page will now reload to get a new QR code.');
+            window.location.reload();
+        } catch (error) {
+            console.error('Error logging out:', error);
+            alert('Failed to log out.');
+        }
+    });
+
+    // Start polling
+    statusInterval = setInterval(checkStatus, 2000); // Poll every 2 seconds
+    checkStatus(); // Initial check
 });

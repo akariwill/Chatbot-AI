@@ -3,25 +3,46 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WhatsApp Bot QR</title>
+    <title>WhatsApp Bot Control Panel</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container">
-        <h1>Scan QR Code to Start WhatsApp Bot</h1>
-        <div id="qrCodeContainer">
-            <img id="qrImage" alt="QR Code" />
-        </div>
-        <div class="instructions">
-            <p>To connect your WhatsApp, please follow these steps:</p>
-            <ol>
-                <li>Open WhatsApp on your phone.</li>
-                <li>Go to <strong>Settings</strong> > <strong>Linked Devices</strong>.</li>
-                <li>Tap on <strong>Link a Device</strong>.</li>
-                <li>Scan the QR code shown on this screen.</li>
-            </ol>
-        </div>
-        <p id="status">Fetching QR code...</p>
+    <div id="app">
+        <header>
+            <h1>WhatsApp Bot Status</h1>
+        </header>
+        <main>
+            <!-- Login View -->
+            <div id="login-view">
+                <div id="status-container">
+                    <p id="status-text">Initializing...</p>
+                </div>
+                <div id="qr-container">
+                    <img id="qr-image" src="" alt="QR Code will appear here">
+                    <p>Scan this QR code with your WhatsApp mobile app.</p>
+                </div>
+                <div class="instructions">
+                    <p>To connect your WhatsApp, please follow these steps:</p>
+                    <ol>
+                        <li>Open WhatsApp on your phone.</li>
+                        <li>Go to <strong>Settings</strong> > <strong>Linked Devices</strong>.</li>
+                        <li>Tap on <strong>Link a Device</strong>.</li>
+                        <li>Scan the QR code shown on this screen.</li>
+                    </ol>
+                </div>
+            </div>
+
+            <!-- Dashboard View -->
+            <div id="dashboard-view" style="display: none;">
+                <div id="dashboard-status">
+                    <p>✅ Bot is connected and running.</p>
+                </div>
+                <button id="logout-button">Logout</button>
+            </div>
+        </main>
+        <footer>
+            <p>Powered by Baileys</p>
+        </footer>
     </div>
     <script src="script.js"></script>
 </body>
