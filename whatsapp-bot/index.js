@@ -1,13 +1,16 @@
-// index.js – FINAL FIXED VERSION (race condition + reconnect + QR API)
-// Requires Node.js >= 16
+// index.js — STRONGER VERSION
+// - process lock to prevent double-node start
+// - exponential backoff, special-handling for 401/515
+// - robust cleanup of previous socket
+// Node >= 16 recommended
 
 const {
-    default: makeWASocket,
-    useMultiFileAuthState,
-    fetchLatestBaileysVersion,
-    makeCacheableSignalKeyStore,
-    DisconnectReason,
-    downloadMediaMessage
+  default: makeWASocket,
+  useMultiFileAuthState,
+  fetchLatestBaileysVersion,
+  makeCacheableSignalKeyStore,
+  DisconnectReason,
+  downloadMediaMessage
 } = require("@whiskeysockets/baileys");
 
 const { Boom } = require("@hapi/boom");
@@ -18,263 +21,325 @@ const path = require("path");
 const http = require("http");
 const QRCode = require("qrcode");
 const os = require("os");
+const util = require("util");
 
-// FIX: sock harus "let" agar bisa di-reassign saat reconnect
-let sock = null;
-
+// ----------------- CONFIG -----------------
 const QR_FILE = path.join(os.tmpdir(), "last_qr.txt");
-const AUTH_FOLDER = "./auth_info";
+const AUTH_FOLDER = path.join(__dirname, "auth_info");
+const LOCK_FILE = "/tmp/whatsapp-bot.lock";
+const SERVER_PORT = 3000;
+const CHATBOT_API = process.env.CHATBOT_API_URL || "http://127.0.0.1:8001/chat";
 
-// Control flags untuk mencegah double start
-let startPromise = null;
-let reconnectTimer = null;
+// ----------------- PROCESS-LEVEL LOCK -----------------
+// Prevent accidental double-start (if lock exists, exit)
+try {
+  const fd = fs.openSync(LOCK_FILE, "wx"); // throws if exists
+  fs.writeSync(fd, `${process.pid}`);
+  // Keep fd open so lock file remains; we'll remove on exit
+  process.on("exit", () => {
+    try { fs.unlinkSync(LOCK_FILE); } catch (e) {}
+  });
+  process.on("SIGINT", () => process.exit(0));
+  process.on("SIGTERM", () => process.exit(0));
+} catch (e) {
+  console.error(`[LOCK] Another instance is running or lock file exists (${LOCK_FILE}). Exiting.`);
+  process.exit(1);
+}
+
+// ----------------- GLOBALS -----------------
+let sock = null;
 let connected = false;
-let lastStartAttempt = 0;
+let isStarting = false;
+let reconnectTimer = null;
+let failCount = 0; // number of consecutive failed attempts (for backoff)
 
-/* ===========================
-      QR API WEB SERVER
-=========================== */
+// compute backoff delay in ms
+function backoffDelay(failCount, base = 3000, cap = 60000) {
+  const delay = Math.min(cap, Math.round(base * Math.pow(1.8, Math.max(0, failCount - 1))));
+  return delay;
+}
 
+// ----------------- SIMPLE QR WEB API -----------------
 const server = http.createServer(async (req, res) => {
-    if (req.url === "/api/qr") {
-        try {
-            const qrContent = await fs.promises.readFile(QR_FILE, "utf-8");
-            const qrDataUrl = await QRCode.toDataURL(qrContent);
-            res.writeHead(200, { "Content-Type": "application/json" });
-            return res.end(JSON.stringify({ qr: qrDataUrl }));
-        } catch (_) {
-            res.writeHead(200, { "Content-Type": "application/json" });
-            return res.end(JSON.stringify({ qr: null }));
-        }
+  if (req.url === "/api/qr") {
+    try {
+      const qr = (await fs.promises.readFile(QR_FILE, "utf-8")).trim();
+      if (!qr) throw new Error("empty");
+      const dataUrl = await QRCode.toDataURL(qr);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      return res.end(JSON.stringify({ qr: dataUrl }));
+    } catch (e) {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      return res.end(JSON.stringify({ qr: null, msg: "QR not available" }));
     }
+  }
 
-    // Serve static UI
-    const filePath = path.join(__dirname, "public", req.url === "/" ? "index.html" : req.url);
-    const ext = path.extname(filePath).toLowerCase();
-    const mime = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css" }[ext] || "text/plain";
+  // serve minimal index if needed
+  if (req.url === "/") {
+    res.writeHead(200, { "Content-Type": "text/html" });
+    return res.end(`<html><body><h3>WhatsApp Bot</h3><p>Visit /api/qr to get QR (data-url)</p></body></html>`);
+  }
 
-    fs.readFile(filePath, (err, data) => {
-        if (err) {
-            res.writeHead(404);
-            return res.end("Not Found");
-        }
-        res.writeHead(200, { "Content-Type": mime });
-        res.end(data);
-    });
+  res.writeHead(404);
+  res.end("Not Found");
 });
 
-server.listen(3000, () => {
-    console.log("Server running at http://160.25.222.84:3000/");
+server.listen(SERVER_PORT, () => {
+  console.log(`[HTTP] QR server running on http://0.0.0.0:${SERVER_PORT}/`);
 });
 
-/* ===========================
-        CHAT HISTORY
-=========================== */
+// ----------------- UTILITIES -----------------
+async function safeUnlink(file) {
+  try { if (fs.existsSync(file)) await fs.promises.unlink(file); } catch (e) {}
+}
 
-async function saveChatHistory(sender, message, isBot = false) {
+function clearSock() {
+  if (!sock) return;
+  try {
+    sock.ev.removeAllListeners();
+  } catch (e) {}
+  try {
+    sock.end && sock.end();
+  } catch (e) {}
+  sock = null;
+}
+
+// minimal chat logging for debugging
+async function appendLog(sender, text, isBot = false) {
+  try {
     const dir = path.join(__dirname, "chat_history");
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-
     const file = path.join(dir, `${sender.split("@")[0]}.log`);
-    const ts = new Date().toLocaleString("id-ID", { timeZone: "Asia/Jakarta" });
-
-    await fs.promises.appendFile(file, `[${ts}] ${isBot ? "Bot" : "User"}: ${message}\n`);
+    const ts = new Date().toLocaleString();
+    await fs.promises.appendFile(file, `[${ts}] ${isBot ? "Bot" : "User"}: ${text}\n`);
+  } catch (e) {
+    console.warn("[LOG] appendLog failed", e.message || e);
+  }
 }
 
-function isNewUser(sender) {
-    return !fs.existsSync(path.join(__dirname, "chat_history", `${sender.split("@")[0]}.log`));
-}
-
-/* ===========================
-       RESPON OTOMATIS
-=========================== */
-
-function getGreetingResponse(text, force = false) {
-    const g = ["hi", "halo", "hai", "p", "permisi", "assalamualaikum", "selamat pagi", "selamat siang", "selamat sore", "selamat malam"];
-    const n = text.toLowerCase().trim();
-
-    const hour = new Date().getHours();
-    const w = hour < 11 ? "pagi" : hour < 15 ? "siang" : hour < 18 ? "sore" : "malam";
-    const s = `Selamat ${w}`;
-
-    if (g.includes(n))
-        return `${s} juga! 😊 Ada yang bisa aku bantu?\n\nCoba tanyakan:\n- Paket WiFi\n- Cara bayar\n- Nomor teknisi\n`;
-
-    return force ? s : null;
-}
-
-function getInfoResponse(text) {
-    const t = text.toLowerCase();
-
-    if (t.includes("alamat"))
-        return `📍 Lokasi kantor:\nPT. Telemedia Prima Nusantara\nhttps://www.google.com/maps/place/PT.+Telemedia+Prima+Nusantara/`;
-
-    if (t.includes("teknisi"))
-        return `🔧 Hubungi teknisi: 0851-7205-1808`;
-
-    return null;
-}
-
-/* ===========================
-      SAVE MEDIA USER
-=========================== */
-
-async function saveMedia(msg, sock, sender) {
+async function saveMedia(msg, sockInstance, sender) {
+  try {
     if (!msg.message) return;
-
-    const type = Object.keys(msg.message).find(x =>
-        ["imageMessage", "videoMessage", "documentMessage", "audioMessage", "locationMessage"].includes(x)
+    const type = Object.keys(msg.message).find(k =>
+      ["imageMessage", "videoMessage", "documentMessage", "audioMessage", "locationMessage"].includes(k)
     );
-
     if (!type) return;
-
     const folder = path.join(__dirname, "media", sender.replace(/[@:\.]/g, "_"));
     if (!fs.existsSync(folder)) fs.mkdirSync(folder, { recursive: true });
 
     if (type === "locationMessage") {
-        const f = path.join(folder, `location_${Date.now()}.json`);
-        fs.writeFileSync(f, JSON.stringify({
-            lat: msg.message[type].degreesLatitude,
-            lng: msg.message[type].degreesLongitude
-        }, null, 2));
-        return;
+      const file = path.join(folder, `location_${Date.now()}.json`);
+      fs.writeFileSync(file, JSON.stringify(msg.message[type], null, 2));
+      return;
     }
 
     const buffer = await downloadMediaMessage(msg, "buffer", {}, { logger: P({ level: "silent" }) });
-
-    const ext = type === "imageMessage" ? ".jpg"
-        : type === "videoMessage" ? ".mp4"
-            : type === "audioMessage" ? ".mp3"
-                : "";
-
-    const f = path.join(folder, Date.now() + ext);
-    fs.writeFileSync(f, buffer);
+    const ext = type === "imageMessage" ? ".jpg" : type === "videoMessage" ? ".mp4" : ".bin";
+    const filePath = path.join(folder, `${Date.now()}${ext}`);
+    fs.writeFileSync(filePath, buffer);
+  } catch (e) {
+    console.warn("[MEDIA] saveMedia failed", e.message || e);
+  }
 }
 
-/* ===========================
-        START SOCKET SAFE
-=========================== */
-
+// ----------------- START SOCKET (robust) -----------------
 async function startSock() {
-    if (startPromise) return startPromise;
+  // prevent concurrent starts
+  if (isStarting) {
+    console.log("[startSock] already starting, skip.");
+    return;
+  }
+  if (connected) {
+    console.log("[startSock] already connected, skip.");
+    return;
+  }
 
-    startPromise = (async () => {
+  isStarting = true;
+  try {
+    console.log("[startSock] attempt starting...");
 
-        if (Date.now() - lastStartAttempt < 1500)
-            await new Promise(r => setTimeout(r, 1500));
-        lastStartAttempt = Date.now();
+    // cleanup old socket state
+    clearSock();
 
-        if (connected) {
-            startPromise = null;
-            return;
+    // ensure auth folder exists (Baileys will create it if not)
+    if (!fs.existsSync(AUTH_FOLDER)) {
+      try { fs.mkdirSync(AUTH_FOLDER, { recursive: true }); } catch (e) {}
+    }
+
+    // fetch version
+    let version;
+    try {
+      const v = await fetchLatestBaileysVersion();
+      version = v.version;
+      console.log("[startSock] baileys version:", version);
+    } catch (e) {
+      console.warn("[startSock] failed to fetch baileys version, continuing with default. Err:", e.message || e);
+      version = undefined;
+    }
+
+    const { state, saveCreds } = await useMultiFileAuthState(AUTH_FOLDER);
+
+    sock = makeWASocket({
+      version,
+      logger: P({ level: "silent" }),
+      printQRInTerminal: false,
+      auth: {
+        creds: state.creds,
+        keys: makeCacheableSignalKeyStore(state.keys, P({ level: "silent" }))
+      },
+      connectTimeoutMs: 60000,
+      syncFullHistory: false
+    });
+
+    // save creds on change
+    sock.ev.on("creds.update", saveCreds);
+
+    // messages event
+    sock.ev.on("messages.upsert", async ({ messages }) => {
+      try {
+        const msg = messages?.[0];
+        if (!msg || msg.key?.fromMe) return;
+        const sender = msg.key.remoteJid || "unknown";
+        if (sender.endsWith("@g.us")) return;
+
+        // save media & history
+        await saveMedia(msg, sock, sender);
+
+        const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || "";
+        if (text) {
+          await appendLog(sender, text, false);
         }
 
-        console.log("Starting WhatsApp socket...");
+        // auto replies (simple)
+        const t = text.toLowerCase().trim();
+        if (!t) return;
 
+        if (["hi","halo","hai","p"].includes(t)) {
+          const hour = new Date().getHours();
+          const w = hour < 11 ? "pagi" : hour < 15 ? "siang" : hour < 18 ? "sore" : "malam";
+          const reply = `Selamat ${w}! Ada yang bisa dibantu?`;
+          await sock.sendMessage(sender, { text: reply });
+          await appendLog(sender, reply, true);
+          return;
+        }
+
+        // forward to python chatbot API
         try {
-            const { state, saveCreds } = await useMultiFileAuthState(AUTH_FOLDER);
-            const { version } = await fetchLatestBaileysVersion();
-
-            sock = makeWASocket({
-                version,
-                auth: {
-                    creds: state.creds,
-                    keys: makeCacheableSignalKeyStore(state.keys, P({ level: "silent" }))
-                },
-                printQRInTerminal: false,
-                logger: P({ level: "silent" }),
-            });
-
-            sock.ev.on("creds.update", saveCreds);
-
-            /* ======================= MESSAGE RECEIVED ======================= */
-
-            sock.ev.on("messages.upsert", async ({ messages }) => {
-                const msg = messages[0];
-                if (!msg || msg.key.fromMe) return;
-
-                const sender = msg.key.remoteJid;
-                if (sender.endsWith("@g.us")) return;
-
-                const text = msg.message?.conversation ||
-                    msg.message?.extendedTextMessage?.text || "";
-
-                await saveMedia(msg, sock, sender);
-                await saveChatHistory(sender, text);
-
-                const newUser = isNewUser(sender);
-                if (newUser) {
-                    const welcome = `Selamat datang di layanan WiFi! 👋 Saya siap membantu.`;
-                    await sock.sendMessage(sender, { text: welcome });
-                    await saveChatHistory(sender, welcome, true);
-                }
-
-                const greet = getGreetingResponse(text);
-                if (greet && !newUser) {
-                    await sock.sendMessage(sender, { text: greet });
-                    return;
-                }
-
-                const info = getInfoResponse(text);
-                if (info) {
-                    await sock.sendMessage(sender, { text: info });
-                    return;
-                }
-
-                try {
-                    const res = await axios.post("http://160.25.222.84:8001/chat", { query: text });
-                    const answer = res.data.response || "Maaf, saya tidak memahami pertanyaan Anda.";
-                    await sock.sendMessage(sender, { text: answer });
-                    await saveChatHistory(sender, answer, true);
-                } catch (e) {
-                    await sock.sendMessage(sender, { text: "Terjadi error, coba lagi nanti." });
-                }
-            });
-
-            /* ======================= CONNECTION UPDATE ====================== */
-
-            sock.ev.on("connection.update", ({ connection, lastDisconnect, qr }) => {
-                if (qr) fs.writeFileSync(QR_FILE, qr);
-
-                if (connection === "open") {
-                    console.log("WhatsApp connected!");
-                    connected = true;
-                    if (fs.existsSync(QR_FILE)) fs.unlinkSync(QR_FILE);
-                }
-
-                if (connection === "close") {
-                    connected = false;
-
-                    const reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
-                    console.log("Connection closed:", reason);
-
-                    if (reason === DisconnectReason.loggedOut) {
-                        fs.rmSync(AUTH_FOLDER, { recursive: true, force: true });
-                        return;
-                    }
-
-                    if (!reconnectTimer) {
-                        reconnectTimer = setTimeout(() => {
-                            reconnectTimer = null;
-                            startSock();
-                        }, 5000);
-                    }
-                }
-            });
-
-        } catch (err) {
-            console.error("startSock error:", err);
-        } finally {
-            startPromise = null;
+          const resp = await axios.post(CHATBOT_API, { query: text }, { timeout: 20000 });
+          const out = (resp.data?.response || "Maaf, saya belum tahu jawaban itu.").toString();
+          await sock.sendMessage(sender, { text: out });
+          await appendLog(sender, out, true);
+        } catch (e) {
+          console.warn("[CHAT] chatbot request failed", e.message || e);
+          await sock.sendMessage(sender, { text: "Maaf, terjadi gangguan sistem. Coba lagi nanti." });
         }
-    })();
+      } catch (inner) {
+        console.error("[MSG HANDLER] error", inner);
+      }
+    });
 
-    return startPromise;
+    // connection update
+    sock.ev.on("connection.update", async (update) => {
+      try {
+        const { connection, lastDisconnect, qr } = update;
+
+        if (qr) {
+          try { await fs.promises.writeFile(QR_FILE, qr); } catch (e) {}
+          console.log("[QR] QR updated (written to file)");
+        }
+
+        if (connection === "open") {
+          console.log("[CONN] connection open");
+          connected = true;
+          failCount = 0; // reset failure counter on success
+          // remove QR file to hide
+          try { await safeUnlink(QR_FILE); } catch (e) {}
+        }
+
+        if (connection === "close") {
+          connected = false;
+          const code = new Boom(lastDisconnect?.error)?.output?.statusCode;
+          console.warn("[CONN] connection closed:", code, util.inspect(lastDisconnect?.error, { depth: 1 }));
+
+          // handle specific codes
+          if (code === DisconnectReason.loggedOut || code === 401) {
+            // 401 typically means session conflict — do NOT auto-restart aggressively.
+            console.error("[CONN] logged out/conflict detected (401).");
+            console.error("[CONN] Action: remove auth folder and re-scan QR manually.");
+            try { fs.rmSync(AUTH_FOLDER, { force: true, recursive: true }); } catch (e) { console.warn("[CLEAN] failed remove auth", e.message || e); }
+            // allow user to scan again: write no QR (will be recreated on next start)
+            await safeUnlink(QR_FILE);
+            // leave process running but DO NOT auto-restart. Exit to allow manual start/scan if desired.
+            console.error("[CONN] Exiting process to allow clean re-login. Start the script again after scanning QR.");
+            // cleanup then exit
+            clearSock();
+            process.exit(0);
+            return;
+          }
+
+          if (code === 515) {
+            // stream errored — increase failure count and schedule a longer backoff
+            failCount++;
+            const delay = backoffDelay(failCount, 5000, 120000); // base 5s, cap 120s for stream errors
+            console.warn(`[CONN] stream error (515). Scheduling reconnect in ${delay}ms (failCount=${failCount}).`);
+            if (reconnectTimer) clearTimeout(reconnectTimer);
+            reconnectTimer = setTimeout(() => {
+              reconnectTimer = null;
+              startSock().catch(e => console.error("[RECONNECT] startSock failed", e));
+            }, delay);
+            return;
+          }
+
+          // other closes: moderate backoff and restart
+          failCount++;
+          const delay = backoffDelay(failCount);
+          console.log(`[CONN] scheduling reconnect in ${delay}ms (failCount=${failCount})`);
+          if (reconnectTimer) clearTimeout(reconnectTimer);
+          reconnectTimer = setTimeout(() => {
+            reconnectTimer = null;
+            startSock().catch(e => console.error("[RECONNECT] startSock failed", e));
+          }, delay);
+        }
+      } catch (e) {
+        console.error("[CONN HANDLER] error", e);
+      }
+    });
+
+    console.log("[startSock] socket created & handlers attached.");
+  } catch (e) {
+    // fatal startup error
+    failCount++;
+    const delay = backoffDelay(failCount);
+    console.error("[startSock] fatal error while starting:", e?.message || e);
+    console.log(`[startSock] retrying in ${delay} ms`);
+    if (reconnectTimer) clearTimeout(reconnectTimer);
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      startSock().catch(err => console.error("[RETRY] startSock failed", err));
+    }, delay);
+  } finally {
+    isStarting = false;
+  }
 }
 
-/* ===========================
-       START ON RUN
-=========================== */
+// ----------------- start on run -----------------
+process.on("uncaughtException", (err) => {
+  console.error("[UNCAUGHT]", err);
+});
+process.on("unhandledRejection", (r) => {
+  console.error("[UNHANDLED REJECTION]", r);
+});
 
-process.on("SIGINT", () => process.exit(0));
-startSock();
+// graceful shutdown: clean sock and lock file
+process.on("SIGINT", async () => {
+  console.log("[SIGNAL] SIGINT received, shutting down.");
+  if (reconnectTimer) clearTimeout(reconnectTimer);
+  clearSock();
+  try { if (fs.existsSync(LOCK_FILE)) fs.unlinkSync(LOCK_FILE); } catch (e) {}
+  process.exit(0);
+});
+
+// kick off
+startSock().catch(e => {
+  console.error("[BOOT] startSock initial failed", e);
+});
