@@ -31,13 +31,13 @@ def home():
 def get_qr_code():
     try:
         if not os.path.exists(QR_FILE_PATH):
-            return jsonify({"qr": None, "message": "QR code not generated yet."}), 200
+            return jsonify({"qr": None, "message": "QR コードはまだ生成されていません。"}), 200
 
         with open(QR_FILE_PATH, "r") as f:
             qr_content = f.read().strip()
 
         if not qr_content:
-            return jsonify({"qr": None, "message": "QR code is empty."}), 200
+            return jsonify({"qr": None, "message": "QRコードが空です。"}), 200
 
         img = qrcode.make(qr_content)
         buf = io.BytesIO()
@@ -49,7 +49,7 @@ def get_qr_code():
         return jsonify({"qr": qr_data_url}), 200
 
     except Exception as e:
-        return jsonify({"error": f"Failed to generate QR code: {str(e)}"}), 500
+        return jsonify({"error": f"QR コードの生成に失敗しました: {str(e)}"}), 500
 
 
 @app.route("/chat", methods=["POST"])
@@ -57,7 +57,7 @@ def chat_endpoint():
     data = request.get_json()
 
     if not data or "query" not in data:
-        return jsonify({"error": "Query not provided"}), 400
+        return jsonify({"error": "クエリが提供されていません"}), 400
 
     query = data["query"]
 

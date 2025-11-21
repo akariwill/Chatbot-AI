@@ -24,9 +24,9 @@ export default async function startBot() {
         if (qr) {
             try {
                 await fs.writeFile(QR_FILE, qr);
-                console.log("QR code saved to file.");
+                console.log("QR コードがファイルに保存されました。");
             } catch (err) {
-                console.error("Failed to write QR code to file:", err);
+                console.error("QR コードをファイルに書き込めませんでした:", err);
             }
         }
 
@@ -36,7 +36,7 @@ export default async function startBot() {
                 await fs.unlink(QR_FILE);
             } catch (err) {
                 if (err.code !== 'ENOENT') {
-                    console.error("Failed to delete QR file:", err);
+                    console.error("QR ファイルの削除に失敗しました:", err);
                 }
             }
 
@@ -50,10 +50,10 @@ export default async function startBot() {
                 await fs.unlink(QR_FILE);
             } catch (err) {
                 if (err.code !== 'ENOENT') {
-                    console.error("Failed to delete QR file:", err);
+                    console.error("QR ファイルの削除に失敗しました:", err);
                 }
             }
-            console.log("✅ Terhubung ke WhatsApp!");
+            console.log("✅ WhatsApp をご利用ください!");
         }
     });
 
