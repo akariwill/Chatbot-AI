@@ -5,6 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const loginView = document.getElementById('login-view');
     const dashboardView = document.getElementById('dashboard-view');
     const logoutButton = document.getElementById('logout-button');
+    const regenerateQrButton = document.getElementById('regenerate-qr-button');
 
     let statusInterval;
 
@@ -19,16 +20,30 @@ document.addEventListener('DOMContentLoaded', () => {
                 qrContainer.style.display = 'none';
             }
         } catch (error) {
-            console.error('Error fetching QR code:', error);
+            console.error('QR コードの取得中にエラーが発生しました:', error);
             qrContainer.style.display = 'none';
         }
     };
+    
+    regenerateQrButton.addEventListener('click', async () => {
+        try {
+            const response = await fetch('/api/regenerate-qr', { method: 'POST' });
+            if(response.ok) {
+                await fetchQrCode();
+            } else {
+                alert('QR コードの再生成に失敗しました。');
+            }
+        } catch (error) {
+            console.error('QR コードの再生成中にエラーが発生しました:', error);
+            alert('QR コードの再生成に失敗しました。');
+        }
+    });
 
     const checkStatus = async () => {
         try {
             const response = await fetch('/api/status');
             if (!response.ok) {
-                throw new Error('Network response was not ok');
+                throw new Error('ネットワーク応答が正常ではありませんでした');
             }
             const data = await response.json();
 
@@ -36,14 +51,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 case 'CONNECTED':
                     loginView.style.display = 'none';
                     dashboardView.style.display = 'block';
-                    // Stop polling when connected
+                    // 接続時にポーリングを停止する
                     if (statusInterval) clearInterval(statusInterval);
                     break;
 
                 case 'WAITING_FOR_QR':
                     dashboardView.style.display = 'none';
                     loginView.style.display = 'block';
-                    statusText.textContent = 'Waiting for QR Code Scan...';
+                    statusText.textContent = 'QRコードスキャンを待っています...';
                     await fetchQrCode();
                     break;
 
@@ -51,7 +66,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     dashboardView.style.display = 'none';
                     loginView.style.display = 'block';
                     qrContainer.style.display = 'none';
-                    statusText.textContent = 'Connecting...';
+                    statusText.textContent = '接続中...';
                     break;
 
                 case 'DISCONNECTED':
@@ -59,27 +74,27 @@ document.addEventListener('DOMContentLoaded', () => {
                     dashboardView.style.display = 'none';
                     loginView.style.display = 'block';
                     qrContainer.style.display = 'none';
-                    statusText.textContent = 'Disconnected. Attempting to reconnect...';
+                    statusText.textContent = '切断されました。再接続を試行しています...';
                     break;
             }
         } catch (error) {
-            console.error('Error fetching status:', error);
-            statusText.textContent = 'Error: Could not connect to the server.';
+            console.error('ステータスの取得中にエラーが発生しました:', error);
+            statusText.textContent = 'エラー: サーバーに接続できませんでした。';
         }
     };
 
     logoutButton.addEventListener('click', async () => {
         try {
             await fetch('/api/logout', { method: 'POST' });
-            alert('Logged out successfully. The page will now reload to get a new QR code.');
+            alert('ログアウトに成功しました。新しいQRコードを取得するためにページを再読み込みします。');
             window.location.reload();
         } catch (error) {
-            console.error('Error logging out:', error);
-            alert('Failed to log out.');
+            console.error('ログアウトエラー:', error);
+            alert('ログアウトに失敗しました。');
         }
     });
 
-    // Start polling
-    statusInterval = setInterval(checkStatus, 2000); // Poll every 2 seconds
-    checkStatus(); // Initial check
+    // 投票を開始する
+    statusInterval = setInterval(checkStatus, 2000); // 2秒ごとにポーリング
+    checkStatus(); // 初期チェック
 });

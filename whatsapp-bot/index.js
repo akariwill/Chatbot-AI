@@ -64,6 +64,37 @@ app.post('/api/logout', async (req, res) => {
     // The connection.update handler will automatically call startSock() on loggedOut disconnect
 });
 
+app.post('/api/regenerate-qr', async (req, res) => {
+    console.log('🔄 QRコードの再生成リクエストを受信しました...');
+    if (sock) {
+        try {
+            // We are not waiting for logout to complete.
+            // The goal is to just trigger the 'close' event.
+            sock.logout();
+        } catch (err) {
+            // This might throw if the socket is already in a bad state, which is fine.
+            console.error('❌ ログアウト中にエラーが発生しましたが、続行します:', err.message);
+        }
+    }
+
+    // Clean up old session to ensure a new QR is generated
+    const authInfoDir = path.join(__dirname, 'auth_info');
+    if (fs.existsSync(authInfoDir)) {
+        try {
+            fs.rmSync(authInfoDir, { recursive: true, force: true });
+            console.log('✅ 古いセッションディレクトリを削除しました。');
+        } catch (err) {
+            console.error('❌ セッションディレクトリの削除に失敗しました:', err);
+            // Don't block the restart, but log the error
+        }
+    }
+
+    // The 'connection.update' event with 'loggedOut' will trigger startSock()
+    // but we can also trigger it manually if the socket was not even connected.
+    // To be safe, let's just rely on the event handler.
+    res.status(200).json({ message: 'QRコードの再生成を開始しました。' });
+});
+
 
 // --- Bot Business Logic (unchanged) ---
 async function saveChatHistory(sender, message, isBot = false) {
