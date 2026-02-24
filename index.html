@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Tugas Akhir - Chatbot AI Berbasis LLM & RAG | Moh Wildan Haikhal</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Tugas Akhir: Pengembangan Chatbot AI Berbasis Large Language Model (LLM) LangChain dengan Retrieval-Augmented Generation (RAG) pada Customer Service di PT. Telemedia Prima Nusantara.">
+
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="website/css/bulma.min.css">
+    <link rel="stylesheet" href="website/css/fontawesome.all.min.css">
+    <link rel="stylesheet" href="website/css/index.css">
+    <script defer src="website/javascript/fontawesome.all.min.js"></script>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script>
+        window.MathJax = { tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] } };
+    </script>
+
+    <style>
+        :root { --nav-height: 52px; }
+        body { font-family: 'Noto Sans', sans-serif; }
+        .thesis-nav {
+            position: sticky; top: 0; z-index: 100;
+            background: #fff; border-bottom: 1px solid #eee; padding: 0.5rem 0;
+            box-shadow: 0 1px 3px rgba(0,0,0,.06);
+        }
+        .thesis-nav .container { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; align-items: center; justify-content: center; }
+        .thesis-nav a {
+            color: #363636; text-decoration: none; font-size: 0.9rem; padding: 0.35rem 0.6rem; border-radius: 4px;
+        }
+        .thesis-nav a:hover { background: #f5f5f5; color: #3273dc; }
+        .thesis-content .section-title { font-size: 1.5rem; font-weight: 700; margin: 2rem 0 1rem; padding-bottom: 0.5rem; border-bottom: 2px solid #3273dc; color: #363636; }
+        .thesis-content .sub-title { font-size: 1.2rem; font-weight: 600; margin: 1.5rem 0 0.75rem; color: #363636; }
+        .thesis-content .sub-sub-title { font-size: 1.05rem; font-weight: 600; margin: 1.25rem 0 0.5rem; color: #4a4a4a; }
+        .thesis-content p { margin-bottom: 0.85rem; line-height: 1.7; text-align: justify; }
+        .thesis-content ul, .thesis-content ol { margin: 0.75rem 0 1rem 1.5rem; line-height: 1.65; }
+        .thesis-content table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+        .thesis-content th, .thesis-content td { border: 1px solid #ddd; padding: 0.5rem 0.65rem; text-align: left; }
+        .thesis-content th { background: #f5f5f5; font-weight: 600; }
+        .thesis-content .table-caption { font-size: 0.85rem; font-style: italic; margin-top: 0.35rem; color: #666; }
+        .pdf-link-wrap { text-align: center; margin: 2rem 0; }
+        .pdf-link-wrap a { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1.2rem; background: #3273dc; color: #fff; border-radius: 6px; text-decoration: none; font-weight: 600; }
+        .pdf-link-wrap a:hover { background: #2366d1; color: #fff; }
+        .thesis-content .math-block { margin: 1rem 0; padding: 1rem; background: #f8f9fa; border-radius: 6px; overflow-x: auto; text-align: center; }
+        .thesis-content figure.thesis-figure { margin: 1.5rem 0; text-align: center; }
+        .thesis-content figure.thesis-figure img { max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 6px; }
+        .thesis-content .figure-caption { font-size: 0.9rem; font-style: italic; color: #555; margin-top: 0.5rem; }
+        .thesis-content .figure-fallback { font-size: 0.85rem; color: #888; margin-top: 0.5rem; }
+    </style>
+</head>
+
+<body>
+
+    <section class="hero is-small">
+        <div class="hero-body">
+            <div class="container is-max-desktop">
+                <div class="columns is-centered">
+                    <div class="column has-text-centered">
+                        <h1 class="title is-2 publication-title">
+                            Pengembangan Chatbot AI Berbasis Large Language Model (LLM) LangChain dengan Retrieval-Augmented Generation (RAG) pada Customer Service di PT. Telemedia Prima Nusantara
+                        </h1>
+                        <p class="is-size-5 publication-authors mt-3">
+                            <strong>Moh Wildan Haikhal</strong> · 062140832958<br>
+                            Program Sarjana Terapan D-IV Manajemen Informatika · Jurusan Manajemen Informatika<br>
+                            <strong>Politeknik Negeri Sriwijaya</strong> · Tahun 2025
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <nav class="thesis-nav">
+        <div class="container is-max-desktop">
+            <a href="#abstrak">Abstrak</a>
+            <a href="#abstract">Abstract</a>
+            <a href="#bab1">Bab I</a>
+            <a href="#bab2">Bab II</a>
+            <a href="#bab3">Bab III</a>
+            <a href="#bab4">Bab IV</a>
+            <a href="#bab5">Bab V</a>
+            <a href="#dapus">Daftar Pustaka</a>
+            <a href="Research.pdf" target="_blank"><i class="fas fa-file-pdf"></i> Unduh PDF</a>
+        </div>
+    </nav>
+
+    <div class="section thesis-content">
+        <div class="container is-max-desktop content">
+
+            <h2 class="section-title" id="abstrak">Abstrak</h2>
+            <p>
+                Penelitian ini bertujuan mengembangkan chatbot AI berbasis Large Language Model (LLM) dengan integrasi LangChain dan Retrieval-Augmented Generation (RAG) untuk meningkatkan layanan pelanggan di PT Telemedia Prima Nusantara. Metode pengembangan menggunakan CRISP-DM, meliputi tahapan pemahaman bisnis, pemahaman data, persiapan data, pemodelan, evaluasi, dan deployment. Metode pengumpulan data dilakukan melalui observasi proses layanan, wawancara dengan tim internal, analisis dokumen FAQ, dokumentasi alur pengiriman invoice dan status pembayaran dari sistem Mixradius, riwayat percakapan pelanggan di WhatsApp, serta dokumen teknis internal lainnya. Data tambahan dikumpulkan melalui feedback pengguna internal saat evaluasi sistem dan eksperimen chatbot berbasis interaksi langsung, menggunakan metrik BLEU, ROUGE, dan waktu respons untuk pengukuran performa.
+            </p>
+            <p>
+                Metode pemecahan masalah menggunakan pendekatan Retrieval-Augmented Generation (RAG) yang diorkestrasi dengan framework LangChain. Informasi dikumpulkan dari basis data vektor menggunakan FAISS, kemudian diolah oleh GPT-3.5 Turbo untuk menghasilkan jawaban. Komponen Skill Router diterapkan untuk klasifikasi intensi dan pengaturan jalur pemrosesan. Hasil evaluasi menunjukkan chatbot mampu memberikan jawaban dengan akurasi 93,33%, BLEU-2 sebesar 0,518, ROUGE-L sebesar 0,683, dan waktu respons rata-rata 1,55 detik. Hasil penelitian ini menunjukan sistem terbukti efektif dalam menjawab pertanyaan pelanggan secara otomatis, efisien, dan kontekstual. Rekomendasi pengembangan selanjutnya mencakup perluasan basis pengetahuan, deteksi intensi otomatis, eskalasi ke agen manusia, integrasi monitoring, serta optimalisasi embedding dan vector store alternatif.
+            </p>
+            <p><strong>Kata Kunci:</strong> Chatbot AI, Large Language Model (LLM), LangChain, Retrieval-Augmented Generation (RAG), Customer Service, CRISP-DM.</p>
+
+            <h2 class="section-title" id="abstract">Abstract</h2>
+            <p>
+                This research aims to develop an AI chatbot based on Large Language Model (LLM) with LangChain and Retrieval-Augmented Generation (RAG) integration to improve customer service at PT Telemedia Prima Nusantara. The development method uses CRISP-DM, which includes the stages of business understanding, data understanding, data preparation, modeling, evaluation, and deployment. Data collection methods were carried out through observation of service processes, interviews with internal teams, analysis of FAQ documents, documentation of invoice delivery and payment status from the Mixradius system, customer conversation history on WhatsApp, and other internal technical documents. Additional data was collected through internal user feedback during system evaluation and experiments with a chatbot based on direct interaction, using BLEU, ROUGE, and response time metrics for performance measurement.
+            </p>
+            <p>
+                The problem-solving method employed the Retrieval-Augmented Generation (RAG) approach, orchestrated using the LangChain framework. Information was collected from the vector database using FAISS, then processed by GPT-3.5 Turbo to generate answers. The Skill Router component was applied for intent classification and processing path configuration. Evaluation results show that the chatbot can provide answers with 93.33% accuracy, a BLEU-2 score of 0.518, a ROUGE-L score of 0.683, and an average response time of 1.55 seconds. These findings demonstrate that the system is effective in automatically, efficiently, and contextually answering customer questions. Further development recommendations include expanding the knowledge base, automatic intent detection, escalation to human agents, monitoring integration, and optimization of alternative embedding and vector stores.
+            </p>
+            <p><strong>Keywords:</strong> AI Chatbot, Large Language Model (LLM), LangChain, Retrieval-Augmented Generation (RAG), Customer Service, CRISP-DM.</p>
+
+            <h2 class="section-title" id="bab1">BAB I — PENDAHULUAN</h2>
+
+            <h3 class="sub-title">1.1 Latar Belakang</h3>
+            <p>
+                Era digital yang terus berkembang ini menciptakan kecerdasan buatan (Artificial Intelligence) sebagai fondasi utama dalam transformasi layanan pelanggan. Perusahaan-perusahaan berlomba mengadopsi teknologi terkini untuk meningkatkan efisiensi dan kualitas pelayanan. Salah satu solusi teknologi yang semakin banyak digunakan adalah chatbot berbasis AI, yang memungkinkan interaksi otomatis dan real-time antara pelanggan dan sistem tanpa keterlibatan langsung manusia.
+            </p>
+            <p>
+                Lee, et. al, (2024) menjelaskan bahwa integrasi chatbot dengan model bahasa besar atau Large Language Models (LLM) mampu meningkatkan kualitas respons dalam percakapan, terutama saat dikombinasikan dengan pendekatan Retrieval-Augmented Generation (RAG). Pendekatan ini memungkinkan chatbot untuk mengambil informasi dari sumber eksternal secara cerdas sebelum membentuk jawaban, menghasilkan tanggapan yang lebih akurat, kontekstual, dan terkini. Bhat, et. al, (2024) menjelaskan bahwa teknologi ini terbukti meningkatkan keakuratan jawaban chatbot dan menurunkan risiko informasi yang keliru, khususnya dalam konteks domain-spesifik.
+            </p>
+            <p>
+                PT Telemedia Prima Nusantara, sebagai penyedia layanan internet, menghadapi tantangan dalam memberikan layanan pelanggan yang cepat, konsisten, dan personal, khususnya melalui platform komunikasi seperti WhatsApp. Saat ini, sebagian besar proses komunikasi dua arah masih dilakukan secara manual, termasuk dalam menjawab pertanyaan umum, pengecekan status layanan, dan pengiriman tagihan. Hal ini dapat menyebabkan keterlambatan respon dan menurunkan kepuasan pelanggan. Sebagai solusi, pengembangan chatbot AI berbasis arsitektur modular diperkenalkan. Sistem ini terdiri dari beberapa komponen utama: Baileys sebagai jembatan komunikasi WhatsApp, FastAPI sebagai backend server, serta LangChain untuk pengelolaan RAG dan integrasi dengan GPT-3.5 Turbo. Di antara komponen ini, Skill Router berperan penting dalam mengklasifikasikan maksud pesan pengguna (intent) dan menentukan jalur pemrosesan yang sesuai untuk menghasilkan jawaban yang optimal.
+            </p>
+            <p>
+                Vidivelli et al, (2024) menjelaskan bahwa arsitektur ini memungkinkan sistem untuk menjawab berbagai pertanyaan seperti FAQ, pengecekan status pembayaran, dan permintaan invoice secara otomatis, sekaligus menjaga fleksibilitas untuk ekspansi layanan di masa depan. Basis pengetahuan internal perusahaan (FAQ dan dokumentasi layanan) disimpan dalam vektor database seperti FAISS atau Weaviate, yang memungkinkan pencarian semantik berbasis konteks untuk mendukung sistem RAG. Berdasarkan latar belakang di atas, penulis akan melakukan penelitian dengan judul “Pengembangan Chatbot AI berbasis Large Language Model (LLM) Langchain dengan Retrieval-Augmented Generation (RAG) pada Customer Service di PT Telemedia Prima Nusantara.”
+            </p>
+
+            <h3 class="sub-title">1.2 Rumusan Masalah</h3>
+            <p>
+                Berdasarkan latar belakang yang telah diuraikan, permasalahan yang akan dibahas dalam penelitian ini adalah: <strong>Bagaimana merancang dan mengembangkan Chatbot AI berbasis Large Language Model (LLM) dengan integrasi LangChain dan Retrieval-Augmented Generation (RAG) yang mampu menjawab pertanyaan pelanggan secara relevan dan kontekstual di PT Telemedia Prima Nusantara?</strong>
+            </p>
+
+            <h3 class="sub-title">1.3 Batasan Masalah</h3>
+            <p>Agar penulisan Tugas Akhir ini lebih terarah, ruang lingkup penelitian dibatasi pada hal-hal berikut:</p>
+            <ul>
+                <li>Platform komunikasi dibatasi pada WhatsApp, dengan library Baileys sebagai jembatan komunikasi.</li>
+                <li>Model bahasa besar yang digunakan adalah model berbayar GPT-3.5 Turbo dari OpenAI yang mendukung integrasi dengan LangChain.</li>
+                <li>Sistem menggunakan komponen Skill Router sebagai modul intent classifier/agent selector.</li>
+                <li>Fungsi chatbot dibatasi pada penanganan interaksi berbasis teks: pertanyaan umum (FAQ), pengecekan status pembayaran, dan permintaan invoice. Tidak mencakup keluhan kompleks atau eskalasi ke manusia.</li>
+                <li>Sumber data pengetahuan terbatas pada dokumen internal perusahaan (FAQ dan data riwayat transaksi yang dapat diakses melalui integrasi eksternal).</li>
+                <li>Pengujian sistem dilakukan pada lingkungan terbatas (server pribadi/VPS), tidak mencakup skala enterprise atau multi-platform di luar WhatsApp.</li>
+            </ul>
+
+            <h3 class="sub-title">1.4 Tujuan dan Manfaat Penelitian</h3>
+            <p><strong>Tujuan:</strong></p>
+            <ul>
+                <li>Mengembangkan sistem chatbot AI berbasis LLM dengan pendekatan RAG menggunakan LangChain untuk meningkatkan kualitas interaksi layanan pelanggan di PT Telemedia Prima Nusantara.</li>
+                <li>Membangun komponen Skill Router untuk mengarahkan pesan pengguna ke jalur pemrosesan yang sesuai.</li>
+                <li>Menghubungkan chatbot dengan vektor database (Weaviate/FAISS) untuk pencarian semantik berdasarkan FAQ dan riwayat percakapan.</li>
+                <li>Menerapkan sistem secara stabil di VPS dengan manajemen proses (Supervisor) agar dapat diakses 24 jam.</li>
+                <li>Melakukan pengujian terhadap performa chatbot dalam memahami konteks dan memberikan jawaban yang cepat, relevan, serta informatif.</li>
+            </ul>
+            <p><strong>Manfaat:</strong></p>
+            <ul>
+                <li>Menyediakan solusi layanan pelanggan berbasis AI yang terotomatisasi dan responsif.</li>
+                <li>Mengurangi beban kerja staf customer service dengan menangani permintaan rutin secara otomatis.</li>
+                <li>Menyediakan chatbot yang adaptif dan kontekstual dengan dukungan RAG dan LLM.</li>
+                <li>Memberikan contoh implementasi nyata integrasi LangChain, LLM, dan arsitektur modular untuk chatbot WhatsApp.</li>
+                <li>Menjadi referensi praktis bagi perusahaan lain yang ingin mengembangkan chatbot cerdas berbasis LLM dan RAG.</li>
+            </ul>
+
+            <h3 class="sub-title">1.5 Sistematika Penulisan</h3>
+            <p>Penelitian ini terdiri dari lima bab: Pendahuluan (latar belakang, rumusan masalah, batasan, tujuan dan manfaat, sistematika); Tinjauan Pustaka (landasan teori dan state of the art); Metodologi Penelitian (tahapan CRISP-DM, waktu dan tempat, pengumpulan data, pengembangan dan pemecahan masalah, analisis kebutuhan); Hasil dan Pembahasan (gambaran objek, analisis kebutuhan, perancangan sistem, hasil pengembangan dan pengujian); Penutup (kesimpulan dan saran).</p>
+
+            <h2 class="section-title" id="bab2">BAB II — TINJAUAN PUSTAKA</h2>
+
+            <h3 class="sub-title">2.1 Landasan Teori</h3>
+            <p><strong>2.1.1 Large Language Model (LLM)</strong> — Model yang digunakan adalah GPT-3.5 Turbo, sebuah LLM berbasis arsitektur transformer dari OpenAI. LLM memiliki kemampuan memproses bahasa alami dalam jumlah besar, memahami konteks, menyusun kalimat, dan berinteraksi secara real-time. Model ini mengandalkan mekanisme attention (scaled dot-product attention) untuk memetakan hubungan antar token dalam kalimat. Perhitungan attention dilakukan dengan dot product antara vektor query dan key, dibagi akar kuadrat dimensi key, lalu disalurkan ke softmax. Rumus scaled dot-product attention:</p>
+            <div class="math-block">
+                \[ \mathrm{Attention}(Q, K, V) = \mathrm{softmax}\left( \frac{QK^T}{\sqrt{d_k}} \right) V \]
+            </div>
+            <p>dengan \(Q\) = matriks Query, \(K\) = matriks Key, \(V\) = matriks Value, \(d_k\) = dimensi key matrix. Arsitektur transformer memiliki kompleksitas komputasi \(O(n^2 \cdot d)\), dengan \(n\) = panjang urutan (sequence length) dan \(d\) = dimensi vektor. Pemilihan GPT-3.5 Turbo didasarkan pada efisiensi komputasi, fleksibilitas konteks, dan keakuratan hasil untuk chatbot layanan pelanggan.</p>
+            <p><strong>2.1.2 Retrieval-Augmented Generation (RAG)</strong> — RAG menggabungkan proses retrieval dari sumber data eksternal (basis pengetahuan, dokumen) dengan proses generation menggunakan LLM. Alur kerja: pertanyaan pengguna di-embed menjadi vektor; dilakukan pencarian dokumen relevan dari vector database (cosine similarity atau euclidean distance); dokumen top-k digabungkan ke dalam prompt dan dikirim ke LLM untuk menghasilkan respons. Dengan demikian jawaban lebih akurat, faktual, dan kontekstual serta mengurangi hallucination.</p>
+            <p><strong>2.1.3 Rule-Based Text Preprocessing</strong> — Meliputi lowercasing, penghapusan karakter non-alfabet, stopword removal, tokenisasi, serta stemming/lemmatization. Tujuannya menyamakan format dan mengurangi noise agar embedding dan pencocokan semantik lebih optimal.</p>
+            <p><strong>2.1.4 Document Embedding dan Mean Pooling</strong> — Teks diubah menjadi representasi vektor (embedding) menggunakan model seperti text-embedding-ada-002. Untuk dokumen, digunakan mean pooling: nilai rata-rata dari seluruh vektor token dalam satu segmen. Rumus mean pooling:</p>
+            <div class="math-block">
+                \[ \vec{v}_{\mathrm{dokumen}} = \frac{1}{n} \sum_{i=1}^{n} \vec{w}_i \]
+            </div>
+            <p>dengan \(\vec{w}_i\) = embedding token ke-\(i\) dan \(n\) = jumlah total token. Embedding disimpan di vector database (FAISS/Weaviate) untuk similarity search.</p>
+            <p><strong>2.1.5 Similarity Search</strong> — Setelah pertanyaan dan dokumen di-embed, kesamaan diukur dengan cosine similarity atau euclidean distance. <em>Cosine similarity</em> mengukur kemiripan arah antara dua vektor (nilai dalam rentang [0, 1], mendekati 1 = sangat mirip):</p>
+            <div class="math-block">
+                \[ \mathrm{CosineSimilarity}(A, B) = \frac{A \cdot B}{\|A\| \|B\|} = \frac{\sum_{i=1}^{n} A_i B_i}{\sqrt{\sum_{i=1}^{n} A_i^2} \cdot \sqrt{\sum_{i=1}^{n} B_i^2}} \]
+            </div>
+            <p><em>Euclidean distance</em> mengukur jarak geometris; nilai lebih kecil berarti lebih mirip:</p>
+            <div class="math-block">
+                \[ d(A, B) = \sqrt{\sum_{i=1}^{n} (A_i - B_i)^2} \]
+            </div>
+            <p>Pencarian dilakukan di FAISS dengan algoritma ANN (Approximate Nearest Neighbor).</p>
+            <p><strong>2.1.6 Chatbot</strong> — Sistem yang berinteraksi dengan manusia melalui bahasa alami. Dapat diklasifikasikan: rule-based, retrieval-based, dan generative-based. Chatbot berbasis LLM-RAG menggabungkan retrieval dari knowledge base dengan kemampuan generatif LLM, sehingga jawaban akurat, kontekstual, dan faktual—sangat cocok untuk layanan pelanggan.</p>
+
+            <h3 class="sub-title">2.2 State of the Art</h3>
+            <p>
+                Awalnya chatbot rule-based digunakan untuk pertanyaan sederhana, namun tidak memadai untuk variasi pertanyaan yang luas. LLM seperti GPT-3.5 memungkinkan jawaban lebih fleksibel dan alami, tetapi memiliki keterbatasan pada pertanyaan domain-spesifik. Pendekatan RAG menggabungkan pencarian informasi berbasis vektor dari sumber eksternal dengan kemampuan generatif LLM. Penelitian Rosari et al. (2024) pada chatbot konsultasi keamanan siber menunjukkan peningkatan akurasi dan kepuasan pengguna. Benita et al. (2024) menerapkan RAG dalam chatbot e-commerce dengan peningkatan akurasi hingga lebih dari 85%. Penelitian ini mengimplementasikan RAG dan LangChain secara spesifik pada layanan pelanggan berbasis WhatsApp di sektor ISP (PT Telemedia Prima Nusantara), dengan keunikan penggunaan LangChain, FAISS/Weaviate, dan pengujian menggunakan data FAQ perusahaan riil.
+            </p>
+
+            <h2 class="section-title" id="bab3">BAB III — METODOLOGI PENELITIAN</h2>
+
+            <h3 class="sub-title">3.1 Tahapan Penelitian (CRISP-DM)</h3>
+            <p>
+                Tahapan penelitian mengikuti CRISP-DM: (1) <strong>Business Understanding</strong> — identifikasi masalah layanan pelanggan di PT Telemedia Prima Nusantara (komunikasi manual via WhatsApp, keterlambatan respon, beban kerja staf, inkonsistensi jawaban); (2) <strong>Data Understanding</strong> — eksplorasi data primer (observasi, wawancara, feedback internal) dan data sekunder (FAQ, histori chat WhatsApp, data transaksi/Mixradius); (3) <strong>Data Preparation</strong> — text preprocessing (lowercase, penghapusan tanda baca, stopword removal, tokenisasi, lemmatization/stemming), segmentasi data berdasarkan kategori dan intensi; (4) <strong>Modeling</strong> — pembangunan arsitektur RAG: embedding dengan text-embedding-ada-002, penyimpanan ke FAISS/Weaviate, pencocokan dengan cosine similarity, prompt dinamis ke GPT-3.5 Turbo via LangChain; (5) <strong>Evaluation</strong> — pengujian dengan metrik BLEU, ROUGE, waktu respons, dan umpan balik pengguna; (6) <strong>Deployment</strong> — implementasi di VPS Ubuntu dengan Supervisor, integrasi WhatsApp via Baileys, operasi 24 jam.
+            </p>
+
+            <h3 class="sub-title">3.2 Waktu dan Tempat Penelitian</h3>
+            <p>Penelitian dilaksanakan selama kurang lebih tiga bulan (10 Maret 2025 – 10 Juni 2025) di PT Telemedia Prima Nusantara, Komplek Pulogadung Permai, Jl. Soekarno Hatta No.99 A Blok L, RT.055/RW.010, Karya Baru, Kec. Alang-Alang Lebar, Kota Palembang, Sumatera Selatan 30151.</p>
+
+            <h3 class="sub-title">3.3 Metode Pengumpulan Data</h3>
+            <p><strong>Data primer:</strong> observasi proses layanan pelanggan, wawancara dengan staf customer service, feedback pengguna internal saat evaluasi, eksperimen chatbot (interaksi langsung) dengan metrik BLEU, ROUGE, dan waktu respons.</p>
+            <p><strong>Data sekunder:</strong> dokumen FAQ, dokumentasi alur invoice dan status pembayaran (Mixradius), riwayat percakapan WhatsApp, dokumen teknis internal lainnya.</p>
+
+            <h3 class="sub-title">3.4 Metode Pemecahan Masalah</h3>
+            <p>Penelitian ini menggunakan pendekatan RAG yang diorkestrasi dengan framework LangChain. RAG menggabungkan retrieval (pengambilan informasi dari basis pengetahuan) dan generation (pembentukan jawaban dengan LLM).</p>
+            <figure class="thesis-figure">
+                <img src="website/img/research/gambar-3-1-arsitektur-rag.png" alt="Gambar 3.1 Arsitektur RAG" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                <p class="figure-fallback" style="display:none;">Gambar 3.1 Arsitektur Retrieval-Augmented Generation. Lihat Research.pdf.</p>
+                <figcaption class="figure-caption">Gambar 3.1 Arsitektur Retrieval-Augmented Generation (Sumber: Shailja Gupta et al., 2024)</figcaption>
+            </figure>
+            <figure class="thesis-figure">
+                <img src="website/img/research/gambar-3-2-arsitektur-langchain.png" alt="Gambar 3.2 Arsitektur LangChain" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                <p class="figure-fallback" style="display:none;">Gambar 3.2 Arsitektur LangChain dalam sistem chatbot. Lihat Research.pdf.</p>
+                <figcaption class="figure-caption">Gambar 3.2 Arsitektur LangChain dalam sistem chatbot (Sumber: Shailja Gupta et al., 2024)</figcaption>
+            </figure>
+            <p>Alur: penerimaan pesan WhatsApp → preprocessing teks → embedding pertanyaan → similarity search di vector store (FAISS/Weaviate) → penyusunan prompt dengan konteks top-k → generasi jawaban dengan GPT-3.5 Turbo → pengiriman respons ke pengguna. Skill Router digunakan untuk klasifikasi intensi dan pengaturan jalur pemrosesan. Evaluasi meliputi:</p>
+            <ul>
+                <li><strong>Akurasi jawaban:</strong> \(\displaystyle \mathrm{Akurasi} = \frac{\text{Jumlah Jawaban Sesuai}}{\text{Total Pertanyaan}} \times 100\%\)</li>
+                <li><strong>BLEU</strong> (n-gram): mengukur kesamaan jawaban dengan referensi; BLEU-2 menggunakan bigram.</li>
+                <li><strong>ROUGE-L</strong> (longest common subsequence): \(\displaystyle \mathrm{ROUGE\text{-}L} = \frac{2 \cdot P \cdot R}{P + R}\) dengan \(P\) = precision, \(R\) = recall.</li>
+                <li><strong>Waktu respons (latency):</strong> dari pesan diterima (\(T_0\)) sampai jawaban dikirim (\(T_1\)):</li>
+            </ul>
+            <div class="math-block">
+                \[ \mathrm{Waktu\,Respons}\,(ms) = T_1 - T_0 \]
+            </div>
+            <p>Target ideal &lt; 2000 ms (2 detik).</p>
+
+            <h3 class="sub-title">3.5 Analisis Kebutuhan Sistem</h3>
+            <p><strong>Flowchart sistem yang berjalan:</strong> Layanan pelanggan manual via WhatsApp; staf mencari informasi (FAQ, status pembayaran, invoice) secara manual dan menjawab. Kelemahan: respon tidak konsisten, keterlambatan, beban kerja tinggi, tidak ada riwayat pencarian otomatis.</p>
+            <figure class="thesis-figure">
+                <img src="website/img/research/gambar-3-3-flowchart-berjalan.png" alt="Gambar 3.3 Flowchart sistem yang berjalan" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                <p class="figure-fallback" style="display:none;">Gambar 3.3 Flowchart sistem yang berjalan. Lihat Research.pdf halaman 36, atau jalankan <code>python extract_images_from_pdf.py</code> untuk mengekstrak gambar.</p>
+                <figcaption class="figure-caption">Gambar 3.3 Flowchart sistem yang berjalan</figcaption>
+            </figure>
+            <p><strong>Flowchart sistem yang diusulkan:</strong> Chatbot LLM-RAG terintegrasi WhatsApp (Baileys) dan LangChain. Alur: terima pesan → preprocessing → embedding → similarity search di vector DB → prompt ke GPT-3.5 Turbo → respons kontekstual ke pengguna. Keunggulan: jawaban otomatis, akurat, konsisten; pencarian semantik; pengurangan beban staf.</p>
+            <figure class="thesis-figure">
+                <img src="website/img/research/gambar-3-4-flowchart-diusulkan.png" alt="Gambar 3.4 Flowchart sistem yang diusulkan" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                <p class="figure-fallback" style="display:none;">Gambar 3.4 Flowchart sistem yang diusulkan. Lihat Research.pdf halaman 38.</p>
+                <figcaption class="figure-caption">Gambar 3.4 Flowchart sistem yang diusulkan</figcaption>
+            </figure>
+            <p><strong>Spesifikasi perangkat keras dan lunak:</strong> Ubuntu Server 22.04 LTS, RAM 32 GB, penyimpanan 128 GB (SSD/HDD), CPU 4 cores atau lebih, koneksi internet stabil. Perangkat lunak: Python 3.13, LangChain, OpenAI API (GPT-3.5 Turbo), FAISS/Weaviate, Baileys (Node.js), Process Manager (Supervisor/PM2). Library Python: openai, langchain, weaviate-client, faiss-cpu, pandas, tiktoken, uvicorn, fastapi.</p>
+
+            <h2 class="section-title" id="bab4">BAB IV — HASIL DAN PEMBAHASAN</h2>
+
+            <h3 class="sub-title">4.1 Gambaran Umum Objek Penelitian</h3>
+            <p>Objek penelitian adalah PT Telemedia Prima Nusantara, penyedia layanan internet (ISP) di Palembang. WhatsApp digunakan sebagai kanal komunikasi utama. Sebelum chatbot, proses layanan dilakukan manual oleh staf: pelanggan mengirim pesan, staf mencari informasi dan mengetik jawaban. Dampaknya: waktu lama, inkonsistensi jawaban, beban kerja tinggi, keterlambatan.</p>
+
+            <h3 class="sub-title">4.2 Analisis Kebutuhan</h3>
+            <p><strong>Kebutuhan fungsional:</strong> (1) Menerima pesan dari pengguna WhatsApp via Baileys; (2) Preprocessing teks (pembersihan, tokenisasi, lemmatization); (3) Embedding pertanyaan dengan text-embedding-ada-002; (4) Pencarian dokumen relevan di vector DB (cosine similarity); (5) Penyusunan prompt dinamis (LangChain); (6) Generasi jawaban dengan GPT-3.5 Turbo; (7) Pengiriman respons ke pengguna; (8) Penyimpanan log interaksi; (9) Fallback jika tidak ada dokumen relevan.</p>
+            <p><strong>Kebutuhan non-fungsional:</strong> Ketersediaan 24 jam (Supervisor di VPS); waktu respons cepat (maks. 2 detik); privasi dan keamanan data; skalabilitas; modularitas dan maintainability; kompatibilitas dengan API eksternal; logging dan monitoring.</p>
+
+            <h3 class="sub-title">4.3 Perancangan Sistem</h3>
+            <figure class="thesis-figure">
+                <img src="website/img/research/gambar-4-1-perancangan-sistem.png" alt="Gambar 4.1 Perancangan sistem" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                <p class="figure-fallback" style="display:none;">Gambar 4.1 Perancangan sistem. Lihat Research.pdf halaman 45.</p>
+                <figcaption class="figure-caption">Gambar 4.1 Perancangan sistem</figcaption>
+            </figure>
+            <p><strong>Data pipeline:</strong> Sumber data: histori percakapan pelanggan (ekspor chat WhatsApp) dan dokumen layanan (FAQ, panduan teknis). Ekstraksi teks dari PDF dengan PyMuPDF/PyPDF2. Preprocessing: text cleaning, RecursiveCharacterTextSplitter (chunk 500–800 token, overlap 20), tokenisasi (tiktoken). Embedding dengan text-embedding-ada-002 (dimensi 1536), penyimpanan ke FAISS/Weaviate.</p>
+            <figure class="thesis-figure">
+                <img src="website/img/research/gambar-4-2-data-pipeline.png" alt="Gambar 4.2 Data pipeline" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                <p class="figure-fallback" style="display:none;">Gambar 4.2 Data pipeline. Lihat Research.pdf halaman 47.</p>
+                <figcaption class="figure-caption">Gambar 4.2 Data pipeline</figcaption>
+            </figure>
+            <p><strong>Algoritma sistem:</strong> Pesan WhatsApp → preprocessing → embedding pertanyaan. Pencocokan dengan vector store menggunakan cosine similarity antara vektor pertanyaan \(Q\) dan vektor dokumen \(D\):</p>
+            <div class="math-block">
+                \[ \mathrm{CosineSimilarity}(Q, D) = \frac{Q \cdot D}{\|Q\| \cdot \|D\|} \]
+            </div>
+            <p>Dokumen dengan skor tertinggi (top-k) → prompt dinamis + konteks → GPT-3.5 Turbo → respons. Conversation Buffer Window Memory (LangChain) menyimpan konteks percakapan terakhir. Fallback jika similarity sangat rendah.</p>
+            <figure class="thesis-figure">
+                <img src="website/img/research/gambar-4-3-conversation-memory.png" alt="Gambar 4.3 Conversation Buffer Window Memory" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                <p class="figure-fallback" style="display:none;">Gambar 4.3 Conversation Buffer Window Memory. Lihat Research.pdf halaman 49.</p>
+                <figcaption class="figure-caption">Gambar 4.3 Conversation Buffer Window Memory</figcaption>
+            </figure>
+
+            <h3 class="sub-title">4.4 Hasil Pengembangan</h3>
+            <p>Sistem chatbot beroperasi langsung melalui WhatsApp tanpa antarmuka web/desktop. Setiap pesan diproses otomatis: preprocessing, embedding, retrieval, prompt, pemanggilan API GPT-3.5 Turbo, respons ke WhatsApp. Parameter (chunk size, overlap, top-k, preprocessing) dikonfigurasi di server. Sistem dilengkapi log percakapan dan buffer memory untuk konteks. Chatbot mampu menjawab pertanyaan status pembayaran, permintaan invoice, dan FAQ umum secara otomatis melalui WhatsApp.</p>
+
+            <h3 class="sub-title">4.4.1 & 4.4.2 Hasil Pengujian dan Analisa</h3>
+            <p>Pengujian dilakukan melalui WhatsApp dengan 6 topik pertanyaan, masing-masing 5 variasi (total 30 pertanyaan). Evaluasi manual (akurasi) dan metrik BLEU-2, ROUGE-L, serta waktu respons.</p>
+
+            <p><strong>Tabel 4.1 — Hasil Pengujian Pertanyaan (dengan Text Preprocessing, Top-K = 3, Chunk Size = 800)</strong></p>
+            <table>
+                <thead>
+                    <tr><th>No</th><th>Topik Pertanyaan</th><th>Variasi</th><th>Jawaban Sesuai</th><th>Jawaban Tidak Sesuai</th><th>Akurasi per Topik (%)</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>1</td><td>Cara cek status pembayaran</td><td>5</td><td>5</td><td>0</td><td>100,00</td></tr>
+                    <tr><td>2</td><td>Permintaan salinan invoice</td><td>5</td><td>5</td><td>0</td><td>100,00</td></tr>
+                    <tr><td>3</td><td>Informasi reset modem/koneksi</td><td>5</td><td>4</td><td>1</td><td>80,00</td></tr>
+                    <tr><td>4</td><td>Waktu aktif layanan setelah pembayaran</td><td>5</td><td>4</td><td>1</td><td>80,00</td></tr>
+                    <tr><td>5</td><td>Alamat kantor & operasional</td><td>5</td><td>5</td><td>0</td><td>100,00</td></tr>
+                    <tr><td>6</td><td>Tindakan saat internet lambat/gangguan jaringan</td><td>5</td><td>4</td><td>1</td><td>80,00</td></tr>
+                    <tr><td colspan="2"><strong>Total</strong></td><td>30</td><td>27</td><td>3</td><td><strong>90,00</strong></td></tr>
+                </tbody>
+            </table>
+
+            <p><strong>Tabel 4.2 — Pengujian Dengan dan Tanpa Text Preprocessing</strong></p>
+            <table>
+                <thead>
+                    <tr><th>No</th><th>Preprocessing</th><th>Chunk size</th><th>Overlap</th><th>Top-K</th><th>Akurasi (%)</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>1</td><td>Ya</td><td>500</td><td>50</td><td>2</td><td>83,33</td></tr>
+                    <tr><td>2</td><td>Ya</td><td>800</td><td>150</td><td>3</td><td>93,33</td></tr>
+                    <tr><td>3</td><td>Tidak</td><td>500</td><td>50</td><td>2</td><td>50,00</td></tr>
+                    <tr><td>4</td><td>Tidak</td><td>800</td><td>150</td><td>3</td><td>90,00</td></tr>
+                </tbody>
+            </table>
+            <p class="table-caption">Sumber: Diolah peneliti pada 10 Juni 2025.</p>
+
+            <p>Dengan text preprocessing dan parameter chunk_size=800, overlap=150, top-k=3, akurasi mencapai <strong>93,33%</strong>. Tanpa preprocessing akurasi turun signifikan; parameter yang lebih besar tetap meningkatkan hasil.</p>
+
+            <p><strong>Tabel 4.3 — Hasil Pengujian BLEU-2 dan ROUGE-L (rata-rata)</strong></p>
+            <p>Nilai rata-rata BLEU-2: <strong>0,518</strong>; ROUGE-L: <strong>0,683</strong>. Menunjukkan jawaban chatbot secara leksikal dan semantik mendekati jawaban referensi.</p>
+
+            <p><strong>Tabel 4.4 — Hasil Pengujian Waktu Respons</strong></p>
+            <p>Rata-rata waktu respons: <strong>1,55 detik</strong> (di bawah target 2 detik). Chatbot responsif untuk penggunaan real-time di WhatsApp.</p>
+
+            <h2 class="section-title" id="bab5">BAB V — PENUTUP</h2>
+
+            <h3 class="sub-title">5.1 Kesimpulan</h3>
+            <ol>
+                <li>Sistem chatbot berhasil dikembangkan dan terintegrasi melalui WhatsApp (Baileys), dengan pemrosesan otomatis: preprocessing, embedding, retrieval vektor, generasi respons GPT-3.5 Turbo.</li>
+                <li>Penerapan text preprocessing secara signifikan meningkatkan akurasi (dari 50% menjadi 93,33% saat preprocessing diaktifkan).</li>
+                <li>Vector database FAISS dan cosine similarity berhasil mengidentifikasi dokumen relevan; respons chatbot kontekstual dan berbasis informasi aktual perusahaan.</li>
+                <li>Evaluasi BLEU-2 (0,518) dan ROUGE-L (0,683) menunjukkan jawaban mendekati referensi secara leksikal dan semantik.</li>
+                <li>Sistem responsif (rata-rata 1,55 detik), memenuhi standar layanan pelanggan berbasis teks. Chatbot terbukti mampu menjawab berbagai pertanyaan umum pelanggan secara otomatis dan efisien serta mendukung transformasi digital di PT Telemedia Prima Nusantara.</li>
+            </ol>
+
+            <h3 class="sub-title">5.2 Saran</h3>
+            <ol>
+                <li>Perluasan basis pengetahuan agar chatbot dapat menjawab lebih banyak jenis pertanyaan (teknis/kompleks); integrasi data dari sistem informasi perusahaan secara real-time.</li>
+                <li>Penerapan deteksi intensi berbasis machine learning untuk skill routing yang lebih presisi (misalnya teknis vs. administratif).</li>
+                <li>Fallback escalation ke agen manusia jika similarity sangat rendah atau pengguna tidak puas berulang kali.</li>
+                <li>Integrasi monitoring dan feedback pengguna untuk pembelajaran dari kegagalan dan deteksi kesalahan jawaban.</li>
+                <li>Eksperimen model embedding baru (misalnya text-embedding-3-small) dan vector store alternatif (Qdrant, Milvus) untuk performa dan skala besar.</li>
+            </ol>
+
+            <h2 class="section-title" id="dapus">Daftar Pustaka</h2>
+            <p>Daftar pustaka lengkap beserta format sitasi terdapat pada dokumen PDF tugas akhir. Beberapa referensi utama: Lewis et al. (2020) — RAG for knowledge-intensive NLP; LangChain documentation; OpenAI embeddings guide; Lee et al. (2023), Benita et al. (2024), Burgan et al. (2024), Vidivelli et al. (2024), serta jurnal dan prosiding terkait chatbot, RAG, dan LLM.</p>
+
+            <div class="pdf-link-wrap">
+                <a href="Research.pdf" target="_blank"><i class="fas fa-file-pdf"></i> Unduh Dokumen PDF Lengkap (Skripsi)</a>
+            </div>
+
+        </div>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="content has-text-centered is-small">
+                Tugas Akhir — Moh Wildan Haikhal · Politeknik Negeri Sriwijaya · 2025
+            </div>
+        </div>
+    </footer>
+
+</body>
+</html>

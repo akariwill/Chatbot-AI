@@ -12,6 +12,19 @@
 
 ---
 
+## 📄 Tugas Akhir (Skripsi)
+
+Repositori ini juga berisi **tugas akhir** dengan judul:
+
+**Pengembangan Chatbot AI Berbasis Large Language Model (LLM) LangChain dengan Retrieval-Augmented Generation (RAG) pada Customer Service di PT. Telemedia Prima Nusantara**
+
+| | |
+|---|---|
+| **Penulis** | Moh Wildan Haikhal |
+| **Institusi** | Politeknik Negeri Sriwijaya |
+| **Program** | D-IV Manajemen Informatika |
+| **Tahun** | 2025 |
+
 ## 🤖 Architecture
 
 This project consists of two main services working together:
@@ -29,7 +42,7 @@ This project consists of two main services working together:
     -   Leverages **FAISS CPU** as a vector store for relevant information retrieval (Retrieval-Augmented Generation - RAG) from available data.
 
 <p align="center">
-  <img src="https://github.com/akariwill/chatbot-ai/blob/main/assets/image/RAG%20Arch.png?raw=true" alt="Architecture Diagram" width="70%">
+  <img src="https://github.com/akariwill/Chatbot-AI/blob/main/assets/image/RAG%20Arch.png?raw=true" alt="Architecture Diagram" width="70%">
 </p>
 
 ---
@@ -62,7 +75,7 @@ Ensure you have Python 3.8+ installed.
 
 1.  **Clone the repository**:
     ```bash
-    git clone https://github.com/akariwill/chatbot-ai.git
+    git clone https://github.com/akariwill/Chatbot-AI.git
     cd chatbot-ai
     ```
 
@@ -119,16 +132,24 @@ Once both services are running, your bot will be active and ready to respond to 
 
 ```
 chatbot-ai/
-├── whatsapp-bot/         # WhatsApp Bot Frontend (Node.js)
+├── index.html              # Website tugas akhir (isi skripsi dalam HTML)
+├── Research.pdf            # Dokumen lengkap skripsi (PDF)
+├── extract_images_from_pdf.py website
+├── website/               
+│   ├── css/
+│   ├── javascript/
+│   └── img/
+│       └── research/       
+├── whatsapp-bot/           # WhatsApp Bot Frontend (Node.js)
 │   ├── index.js
 │   ├── package.json
-│   └── auth_info/        # (Auto-generated, ignored by Git)
-├── app.py                # Entry point for the AI server (FastAPI)
-├── main.py               # Core chatbot logic (LangChain)
-├── requirements.txt      # Python dependencies
-├── Dockerfile            # Configuration for containerization
+│   └── auth_info/         # (Auto-generated, ignored by Git)
+├── app.py                  # Entry point for the AI server (FastAPI)
+├── main.py                 # Core chatbot logic (LangChain)
+├── requirements.txt       # Python dependencies
+├── Dockerfile              # Configuration for containerization
 ├── assets/
-│   └── Data/             # Data for RAG
+│   └── Data/               # Data for RAG
 └── ...
 ```
 
