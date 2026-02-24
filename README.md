@@ -42,7 +42,7 @@ This project consists of two main services working together:
     -   Leverages **FAISS CPU** as a vector store for relevant information retrieval (Retrieval-Augmented Generation - RAG) from available data.
 
 <p align="center">
-  <img src="https://github.com/akariwill/Chatbot-AI/blob/main/assets/image/RAG%20Arch.png?raw=true" alt="Architecture Diagram" width="70%">
+  <img src="https://github.com/akariwill/Chatbot-AI/blob/master/assets/image/RAG%20Arch.png?raw=true" alt="Architecture Diagram" width="70%">
 </p>
 
 ---
